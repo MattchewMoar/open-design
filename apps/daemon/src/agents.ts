@@ -127,10 +127,13 @@ export const AGENT_DEFS = [
     // — issue #235) get auto-detected without writing wrapper scripts.
     fallbackBins: ['openclaude'],
     versionArgs: ['--version'],
-    helpArgs: ['--help'],
+    helpArgs: ['-p', '--help'],
     capabilityFlags: {
       // Flag string -> capability key. After probing `--help`, we set
       // `agentCapabilities[id][key] = true` for each substring that matches.
+      // `--add-dir` and `--include-partial-messages` live under `claude -p`
+      // subcommand, so we probe `claude -p --help` instead of `claude --help`.
+      // Fixes issue #430: --add-dir never detected because it wasn't in global help.
       '--include-partial-messages': 'partialMessages',
       '--add-dir': 'addDir',
     },
@@ -377,6 +380,7 @@ export const AGENT_DEFS = [
     ],
     buildArgs: () => ['acp', '--accept-hooks'],
     streamFormat: 'acp-json-rpc',
+    mcpDiscovery: 'mature-acp',
   },
   {
     id: 'kimi',
@@ -398,6 +402,7 @@ export const AGENT_DEFS = [
     ],
     buildArgs: () => ['acp'],
     streamFormat: 'acp-json-rpc',
+    mcpDiscovery: 'mature-acp',
   },
   {
     id: 'cursor-agent',
@@ -928,6 +933,17 @@ export function getAgentDef(id) {
   return AGENT_DEFS.find((a) => a.id === id) || null;
 }
 
+export function buildLiveArtifactsMcpServersForAgent(def, { enabled = true, command = 'od', argsPrefix = [] } = {}) {
+  if (!enabled || def?.mcpDiscovery !== 'mature-acp') return [];
+  return [
+    {
+      name: 'open-design-live-artifacts',
+      command,
+      args: [...argsPrefix, 'mcp', 'live-artifacts'],
+    },
+  ];
+}
+
 // Adapters that ship the prompt as a positional argv arg (no stdin
 // sentinel upstream) declare a `maxPromptArgBytes` budget so the daemon
 // can fail fast with an actionable, adapter-named error before `spawn`
@@ -1156,6 +1172,11 @@ export function resolveAgentBin(id) {
 // launched from a shell that exported the key for SDK or scripting use.
 // See issue #398.
 //
+// However, when ANTHROPIC_BASE_URL is set the user is intentionally
+// routing Claude Code to a custom endpoint (e.g. a Kimi/Moonshot proxy).
+// In that case claude login is meaningless, so preserve the API key so
+// the child can authenticate against the custom base URL.
+//
 // Windows env-var names are case-insensitive at the kernel level
 // (`GetEnvironmentVariable`), but spreading `process.env` into a plain
 // object loses Node's case-insensitive accessor — `Anthropic_Api_Key`
@@ -1164,6 +1185,13 @@ export function resolveAgentBin(id) {
 export function spawnEnvForAgent(agentId, baseEnv) {
   const env = { ...baseEnv };
   if (agentId !== 'claude') return env;
+  const hasCustomBaseUrl = Object.keys(env).some(
+    (k) =>
+      k.toUpperCase() === 'ANTHROPIC_BASE_URL' &&
+      typeof env[k] === 'string' &&
+      env[k].trim() !== '',
+  );
+  if (hasCustomBaseUrl) return env;
   for (const key of Object.keys(env)) {
     if (key.toUpperCase() === 'ANTHROPIC_API_KEY') delete env[key];
   }
