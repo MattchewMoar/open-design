@@ -117,10 +117,10 @@ function resolveToolPackTelemetryRelayUrl(value: string | undefined): string | u
   try {
     parsed = new URL(normalized);
   } catch {
-    throw new Error(`OPEN_DESIGN_TELEMETRY_RELAY_URL must be an absolute http(s) URL: ${value}`);
+    throw new Error(`OPEN_DESIGN_TELEMETRY_RELAY_URL must be an absolute https URL: ${value}`);
   }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new Error(`OPEN_DESIGN_TELEMETRY_RELAY_URL must use http or https: ${value}`);
+  if (parsed.protocol !== "https:") {
+    throw new Error(`OPEN_DESIGN_TELEMETRY_RELAY_URL must use https: ${value}`);
   }
   return normalized.replace(/\/+$/, "");
 }

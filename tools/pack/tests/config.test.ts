@@ -22,7 +22,14 @@ describe("resolveToolPackConfig telemetry relay", () => {
   it("rejects invalid telemetry relay URLs", () => {
     process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = "not-a-url";
     expect(() => resolveToolPackConfig("mac")).toThrow(
-      /OPEN_DESIGN_TELEMETRY_RELAY_URL must be an absolute http\(s\) URL/,
+      /OPEN_DESIGN_TELEMETRY_RELAY_URL must be an absolute https URL/,
+    );
+  });
+
+  it("rejects plaintext telemetry relay URLs for packaged config", () => {
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = "http://telemetry.open-design.ai/api/langfuse";
+    expect(() => resolveToolPackConfig("mac")).toThrow(
+      /OPEN_DESIGN_TELEMETRY_RELAY_URL must use https/,
     );
   });
 });

@@ -11,9 +11,18 @@ const env: Env = {
 function makeRequest(body: unknown): Request {
   return new Request('https://telemetry.open-design.ai/api/langfuse', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Open-Design-Telemetry': 'langfuse-ingestion-v1',
+    },
     body: JSON.stringify(body),
   });
+}
+
+function makeRateLimiter(success: boolean) {
+  return {
+    limit: vi.fn(async () => ({ success })),
+  };
 }
 
 describe('telemetry worker', () => {
@@ -74,6 +83,47 @@ describe('telemetry worker', () => {
       Authorization: expect.stringMatching(/^Basic /),
       'Content-Type': 'application/json',
     });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('rejects requests without the Open Design client marker', async () => {
+    const response = await worker.fetch(
+      new Request('https://telemetry.open-design.ai/api/langfuse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch: [] }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rate limits validated batches before forwarding', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const limiter = makeRateLimiter(false);
+    const response = await worker.fetch(
+      makeRequest({
+        batch: [
+          {
+            id: 'evt-1',
+            type: 'trace-create',
+            timestamp: '2026-05-11T00:00:00.000Z',
+            body: {
+              id: 'trace-1',
+              name: 'open-design-turn',
+              userId: 'installation-1',
+            },
+          },
+        ],
+      }),
+      { ...env, TELEMETRY_CLIENT_RATE_LIMITER: limiter },
+    );
+
+    expect(response.status).toBe(429);
+    expect(limiter.limit).toHaveBeenCalledWith({ key: 'client:installation-1' });
+    expect(fetchSpy).not.toHaveBeenCalled();
 
     fetchSpy.mockRestore();
   });

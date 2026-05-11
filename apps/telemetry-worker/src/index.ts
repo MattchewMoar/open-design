@@ -1,6 +1,8 @@
 const DEFAULT_LANGFUSE_BASE_URL = 'https://us.cloud.langfuse.com';
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_BATCH_EVENTS = 100;
+const RELAY_MARKER_HEADER = 'X-Open-Design-Telemetry';
+const RELAY_MARKER_VALUE = 'langfuse-ingestion-v1';
 const ALLOWED_EVENT_TYPES = new Set([
   'trace-create',
   'span-create',
@@ -9,10 +11,16 @@ const ALLOWED_EVENT_TYPES = new Set([
   'score-create',
 ]);
 
+interface RateLimitBinding {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   LANGFUSE_PUBLIC_KEY?: string;
   LANGFUSE_SECRET_KEY?: string;
   LANGFUSE_BASE_URL?: string;
+  TELEMETRY_CLIENT_RATE_LIMITER?: RateLimitBinding;
+  TELEMETRY_IP_RATE_LIMITER?: RateLimitBinding;
 }
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
@@ -61,6 +69,42 @@ function validateIngestionBody(value: unknown): string | null {
   return null;
 }
 
+function findTraceUserId(value: unknown): string | null {
+  if (!isRecord(value) || !Array.isArray(value.batch)) return null;
+  for (const event of value.batch) {
+    if (!isRecord(event) || event.type !== 'trace-create' || !isRecord(event.body)) {
+      continue;
+    }
+    const userId = event.body.userId;
+    return typeof userId === 'string' && userId.length > 0 ? userId.slice(0, 200) : null;
+  }
+  return null;
+}
+
+async function enforceRateLimits(
+  request: Request,
+  env: Env,
+  parsedBody: unknown,
+): Promise<Response | null> {
+  const clientKey = findTraceUserId(parsedBody);
+  if (clientKey && env.TELEMETRY_CLIENT_RATE_LIMITER) {
+    const { success } = await env.TELEMETRY_CLIENT_RATE_LIMITER.limit({
+      key: `client:${clientKey}`,
+    });
+    if (!success) return jsonResponse(429, { error: 'rate limit exceeded' });
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP')?.trim();
+  if (ip && env.TELEMETRY_IP_RATE_LIMITER) {
+    const { success } = await env.TELEMETRY_IP_RATE_LIMITER.limit({
+      key: `ip:${ip}`,
+    });
+    if (!success) return jsonResponse(429, { error: 'rate limit exceeded' });
+  }
+
+  return null;
+}
+
 async function readBoundedBody(request: Request): Promise<string | Response> {
   const contentLength = request.headers.get('content-length');
   if (contentLength != null && Number(contentLength) > MAX_BODY_BYTES) {
@@ -101,6 +145,10 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     return jsonResponse(405, { error: 'method not allowed' });
   }
 
+  if (request.headers.get(RELAY_MARKER_HEADER) !== RELAY_MARKER_VALUE) {
+    return jsonResponse(403, { error: 'missing telemetry client marker' });
+  }
+
   const publicKey = env.LANGFUSE_PUBLIC_KEY?.trim();
   const secretKey = env.LANGFUSE_SECRET_KEY?.trim();
   if (!publicKey || !secretKey) {
@@ -126,6 +174,9 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (validationError != null) {
     return jsonResponse(400, { error: validationError });
   }
+
+  const rateLimitResponse = await enforceRateLimits(request, env, parsed);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const upstream = await fetch(resolveLangfuseUrl(env), {
     method: 'POST',

@@ -9,3 +9,17 @@ routes = [
 
 [vars]
 LANGFUSE_BASE_URL = "https://us.cloud.langfuse.com"
+
+[[ratelimits]]
+name = "TELEMETRY_CLIENT_RATE_LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
+name = "TELEMETRY_IP_RATE_LIMITER"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 600
+  period = 60

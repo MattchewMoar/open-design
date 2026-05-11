@@ -174,6 +174,10 @@ export function readLangfuseConfig(
   };
 }
 
+/**
+ * Resolve telemetry delivery in release-safe order: hosted relay first,
+ * direct Langfuse credentials second for local smoke tests, disabled last.
+ */
 export function readTelemetrySinkConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): TelemetrySinkConfig | null {
@@ -615,6 +619,8 @@ export async function reportRunCompleted(
   const config = resolveReportConfig(opts);
   if (!config) {
     if (!missingTelemetrySinkWarned) {
+      // Warn once per daemon process; packaged config is loaded at process
+      // start, so repeated run-level warnings would only add noise.
       missingTelemetrySinkWarned = true;
       console.warn(
         '[langfuse-trace] Telemetry metrics are enabled but no relay or Langfuse credentials are configured',

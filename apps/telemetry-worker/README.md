@@ -5,6 +5,27 @@ client sends redacted Langfuse ingestion batches here after the user enables
 metrics. This Worker holds the Langfuse write credentials and forwards valid
 batches to Langfuse.
 
+The relay keeps Langfuse secret keys out of packaged clients. Release builds
+only include the public relay URL; the Worker adds Langfuse authentication
+server-side after validating the request. If the relay is unavailable, the
+daemon retries, logs the failure, and continues the user flow without blocking
+the CLI or desktop app.
+
+Local development can bypass the relay by setting direct `LANGFUSE_PUBLIC_KEY`
+and `LANGFUSE_SECRET_KEY` environment variables for the daemon. Packaged
+release config should use only `OPEN_DESIGN_TELEMETRY_RELAY_URL`.
+
+## Abuse controls
+
+The Worker requires the Open Design telemetry marker header, validates the
+Langfuse ingestion batch shape and size before forwarding, and uses Cloudflare
+Rate Limiting bindings for two independent keys:
+
+- `TELEMETRY_CLIENT_RATE_LIMITER`: anonymous installation/user id, 120 requests
+  per minute.
+- `TELEMETRY_IP_RATE_LIMITER`: Cloudflare `CF-Connecting-IP`, 600 requests per
+  minute.
+
 ## Secrets
 
 ```bash
