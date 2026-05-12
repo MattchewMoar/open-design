@@ -287,6 +287,17 @@ describe('ManualEditPanel', () => {
     );
   });
 
+  it('shows an inactive Page inspector for fragment HTML sources', () => {
+    const onStyleChange = vi.fn();
+    renderPanel({ onStyleChange, selectedTarget: null, pageStylesEnabled: false });
+
+    expect(host.textContent).toContain('Page styles are available only for full HTML documents.');
+    expect(host.textContent).not.toContain('Background');
+    expect(host.querySelector('input')).toBeNull();
+    expect(host.querySelector('select')).toBeNull();
+    expect(onStyleChange).not.toHaveBeenCalled();
+  });
+
   it('keeps explicit empty page values as field-specific clears', () => {
     const onStyleChange = vi.fn();
     renderPanel({ onStyleChange, selectedTarget: null });
@@ -387,19 +398,23 @@ describe('ManualEditPanel', () => {
     onApplyPatch = vi.fn(),
     onError = vi.fn(),
     onStyleChange = vi.fn(),
+    onInvalidStyle = vi.fn(),
     onClearSelection = vi.fn(),
     attributesText = '{}',
     selectedTarget = target,
     styles = emptyManualEditStyles(),
+    pageStylesEnabled = true,
   }: {
     onDraftChange?: ReturnType<typeof vi.fn>;
     onApplyPatch?: ReturnType<typeof vi.fn>;
     onError?: ReturnType<typeof vi.fn>;
     onStyleChange?: ReturnType<typeof vi.fn>;
+    onInvalidStyle?: ReturnType<typeof vi.fn>;
     onClearSelection?: ReturnType<typeof vi.fn>;
     attributesText?: string;
     selectedTarget?: ManualEditTarget | null;
     styles?: ReturnType<typeof emptyManualEditStyles>;
+    pageStylesEnabled?: boolean;
   } = {}) {
     const draft = {
       ...emptyManualEditDraft('<html></html>'),
@@ -418,9 +433,11 @@ describe('ManualEditPanel', () => {
           error={null}
           canUndo={false}
           canRedo={false}
+          pageStylesEnabled={pageStylesEnabled}
           onSelectTarget={vi.fn()}
           onDraftChange={onDraftChange}
           onStyleChange={onStyleChange}
+          onInvalidStyle={onInvalidStyle}
           onApplyPatch={onApplyPatch}
           onError={onError}
           onClearSelection={onClearSelection}

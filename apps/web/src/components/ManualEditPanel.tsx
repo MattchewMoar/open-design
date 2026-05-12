@@ -26,8 +26,10 @@ export function ManualEditPanel({
   error,
   onDraftChange,
   onStyleChange,
+  onInvalidStyle,
   onError,
   onClearSelection,
+  pageStylesEnabled = true,
 }: {
   targets: ManualEditTarget[];
   selectedTarget: ManualEditTarget | null;
@@ -37,9 +39,11 @@ export function ManualEditPanel({
   canUndo: boolean;
   canRedo: boolean;
   busy?: boolean;
+  pageStylesEnabled?: boolean;
   onSelectTarget: (target: ManualEditTarget) => void;
   onDraftChange: (draft: ManualEditDraft) => void;
   onStyleChange?: (id: string, styles: Partial<ManualEditStyles>, label: string) => void;
+  onInvalidStyle?: (id: string, keys: Array<keyof ManualEditStyles>) => void;
   onApplyPatch: (patch: ManualEditPatch, label: string) => void;
   onError: (message: string) => void;
   onClearSelection: () => void;
@@ -57,6 +61,7 @@ export function ManualEditPanel({
     });
     if (!normalized.ok) {
       onError(normalized.error);
+      onInvalidStyle?.(targetForInspector.id, [key]);
       return;
     }
     onError('');
@@ -75,10 +80,12 @@ export function ManualEditPanel({
           />
         ) : !targetForInspector ? (
           <PageInspector
+            enabled={pageStylesEnabled}
             onStyleChange={(styles) => {
               const normalized = normalizeManualEditStyles(styles, { layoutEnabled: true });
               if (!normalized.ok) {
                 onError(normalized.error);
+                onInvalidStyle?.('__body__', Object.keys(styles) as Array<keyof ManualEditStyles>);
                 return;
               }
               onError('');
@@ -94,8 +101,10 @@ export function ManualEditPanel({
 }
 
 function PageInspector({
+  enabled,
   onStyleChange,
 }: {
+  enabled: boolean;
   onStyleChange: (styles: Partial<ManualEditStyles>) => void;
 }) {
   const [bg, setBg] = useState('');
@@ -122,9 +131,15 @@ function PageInspector({
   return (
     <div className="cc-inspector">
       <Section title="PAGE">
-        <ColorRow label="Background" value={bg} onChange={(value) => update({ bg: value })} />
-        <FontRow value={font} onChange={(value) => update({ font: value })} />
-        <UnitRow label="Base size" value={size} onChange={(value) => update({ size: value })} unit="px" autoUnit />
+        {enabled ? (
+          <>
+            <ColorRow label="Background" value={bg} onChange={(value) => update({ bg: value })} />
+            <FontRow value={font} onChange={(value) => update({ font: value })} />
+            <UnitRow label="Base size" value={size} onChange={(value) => update({ size: value })} unit="px" autoUnit />
+          </>
+        ) : (
+          <p className="cc-section-hint">Page styles are available only for full HTML documents.</p>
+        )}
       </Section>
     </div>
   );

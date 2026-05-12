@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 import {
   applyManualEditPatch,
+  isManualEditFullHtmlDocument,
   readManualEditAttributes,
   readManualEditFields,
   readManualEditOuterHtml,
@@ -173,6 +174,12 @@ describe('manual edit source patches', () => {
     expect(result.source).not.toContain('<!doctype');
     expect(result.source).not.toContain('<html');
     expect(result.source).not.toContain('<body');
+  });
+
+  it('detects full documents after leading comments and keeps fragments distinct', () => {
+    expect(isManualEditFullHtmlDocument('<!-- generated -->\n<!doctype html><html></html>')).toBe(true);
+    expect(isManualEditFullHtmlDocument('<?xml version="1.0"?>\n<html></html>')).toBe(true);
+    expect(isManualEditFullHtmlDocument('<main><h1>Fragment</h1></main>')).toBe(false);
   });
 
   it('preserves full documents with leading comments when saving patches', () => {

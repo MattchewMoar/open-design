@@ -78,6 +78,7 @@ import type {
 import { ManualEditPanel, emptyManualEditDraft, type ManualEditDraft } from './ManualEditPanel';
 import {
   applyManualEditPatch,
+  isManualEditFullHtmlDocument,
   readManualEditAttributes,
   readManualEditFields,
   readManualEditOuterHtml,
@@ -90,7 +91,7 @@ type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => 
 type SlideState = { active: number; count: number };
 type BoardTool = 'inspect' | 'pod';
 type StrokePoint = { x: number; y: number };
-type ManualEditPendingStyleSave = {
+export type ManualEditPendingStyleSave = {
   id: string;
   styles: Partial<ManualEditStyles>;
   label: string;
@@ -450,6 +451,18 @@ function manualEditPreviewShellStyle(
     };
   }
   return previewScaleShellStyle(viewport, previewScale);
+}
+
+export function cancelManualEditPendingStyleSnapshot(
+  pending: ManualEditPendingStyleSave | null,
+  id: string,
+  keys: Array<keyof ManualEditStyles>,
+): ManualEditPendingStyleSave | null {
+  if (!pending || pending.id !== id || keys.length === 0) return pending;
+  const nextStyles = { ...pending.styles };
+  for (const key of keys) delete nextStyles[key];
+  if (Object.keys(nextStyles).length === 0) return null;
+  return { ...pending, styles: nextStyles };
 }
 
 function usePreviewCanvasSize<T extends HTMLElement>() {
@@ -3692,6 +3705,7 @@ function HtmlViewer({
   const previewSource = (manualEditMode && manualEditFrozenSource !== null)
     ? manualEditFrozenSource
     : livePreviewSource;
+  const manualEditPageStylesEnabled = typeof source === 'string' && isManualEditFullHtmlDocument(source);
   // When we URL-load the iframe directly, skip every in-host inlining /
   // srcDoc-rebuilding step. The browser does the asset resolution itself,
   // which is the whole point of the URL-load path.
@@ -3866,12 +3880,17 @@ function HtmlViewer({
     setInspectError(null);
     setQueuedBoardNotes([]);
     setStrokePoints([]);
+    setManualEditFrozenSource(null);
+    setManualEditViewportWidth(null);
     setManualEditTargets([]);
     setSelectedManualEditTarget(null);
+    selectedManualEditTargetIdRef.current = null;
     setManualEditDraft(emptyManualEditDraft());
     setManualEditHistory([]);
     setManualEditUndone([]);
     setManualEditError(null);
+    manualEditPendingStyleRef.current = null;
+    clearManualEditStyleTimer();
   }, [file.name]);
 
   // Selecting a new file or turning inspect off resets the panel target.
@@ -4120,6 +4139,22 @@ function HtmlViewer({
       manualEditStyleTimerRef.current = null;
       void flushManualEditStyleSave();
     }, 1000);
+  }
+
+  function clearManualEditStyleTimer() {
+    if (!manualEditStyleTimerRef.current) return;
+    clearTimeout(manualEditStyleTimerRef.current);
+    manualEditStyleTimerRef.current = null;
+  }
+
+  function cancelManualEditPendingStyles(id: string, keys: Array<keyof ManualEditStyles>) {
+    const nextPending = cancelManualEditPendingStyleSnapshot(manualEditPendingStyleRef.current, id, keys);
+    if (!nextPending) {
+      manualEditPendingStyleRef.current = null;
+      clearManualEditStyleTimer();
+      return;
+    }
+    manualEditPendingStyleRef.current = nextPending;
   }
 
   async function handleManualEditStyleChange(id: string, styles: Partial<ManualEditStyles>, label: string) {
@@ -5368,11 +5403,13 @@ function HtmlViewer({
                 canUndo={manualEditHistory.length > 0}
                 canRedo={manualEditUndone.length > 0}
                 busy={manualEditSaving}
+                pageStylesEnabled={manualEditPageStylesEnabled}
                 onSelectTarget={selectManualEditTarget}
                 onDraftChange={setManualEditDraft}
                 onStyleChange={(id, styles, label) => {
                   void handleManualEditStyleChange(id, styles, label);
                 }}
+                onInvalidStyle={cancelManualEditPendingStyles}
                 onApplyPatch={(patch, label) => {
                   void applyManualEdit(patch, label);
                 }}
