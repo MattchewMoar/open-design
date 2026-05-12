@@ -3215,6 +3215,7 @@ function HtmlViewer({
   const [palettePopoverOpen, setPalettePopoverOpen] = useState(false);
   const [selectedPalette, setSelectedPalette] = useState<PaletteId | null>(null);
   const [previewPalette, setPreviewPalette] = useState<PaletteId | null>(null);
+  const paletteAnchorRef = useRef<HTMLDivElement | null>(null);
   // for hint managing hint box state
   const [openHintBox, setOpenHintBox] = useState(true);
   const [manualEditMode, setManualEditMode] = useState(false);
@@ -4588,7 +4589,7 @@ function HtmlViewer({
           ) : null}
         </div>
         <div className="viewer-toolbar-actions">
-          <div className="palette-tweaks-anchor">
+          <div className="palette-tweaks-anchor" ref={paletteAnchorRef}>
             <button
               type="button"
               className={`viewer-action${selectedPalette || palettePopoverOpen ? ' active' : ''}`}
@@ -4621,6 +4622,7 @@ function HtmlViewer({
               onChange={setSelectedPalette}
               onPreview={setPreviewPalette}
               onClose={() => setPalettePopoverOpen(false)}
+              boundaryRef={paletteAnchorRef}
             />
           </div>
           <button

@@ -1006,6 +1006,28 @@ describe('FileViewer comment picker and tweaks mode', () => {
     expect(screen.getByTestId('comment-mode-toggle')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pods' })).toBeTruthy();
   });
+
+  it('closes the palette tweaks popover when the toolbar toggle is clicked twice', () => {
+    render(
+      <FileViewer
+        projectId="project-1"
+        file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const paletteToggle = screen.getByTestId('palette-tweaks-toggle');
+
+    fireEvent.click(paletteToggle);
+    expect(screen.getByRole('dialog', { name: 'Tweaks' })).toBeTruthy();
+    expect(paletteToggle.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.mouseDown(paletteToggle);
+    fireEvent.click(paletteToggle);
+
+    expect(screen.queryByRole('dialog', { name: 'Tweaks' })).toBeNull();
+    expect(paletteToggle.getAttribute('aria-expanded')).toBe('false');
+  });
 });
 
 describe('applyInspectOverridesToSource', () => {

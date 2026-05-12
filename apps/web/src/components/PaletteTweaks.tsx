@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { Icon } from './Icon';
 
 export type PaletteId =
@@ -24,17 +24,19 @@ type Props = {
   onChange: (id: PaletteId | null) => void;
   onPreview: (id: PaletteId | null) => void;
   onClose: () => void;
+  boundaryRef?: RefObject<HTMLElement | null>;
 };
 
-export function PaletteTweaks({ open, selected, onChange, onPreview, onClose }: Props) {
+export function PaletteTweaks({ open, selected, onChange, onPreview, onClose, boundaryRef }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [hovered, setHovered] = useState<PaletteId | 'original' | null>(null);
 
   useEffect(() => {
     if (!open) return;
     function onDoc(ev: MouseEvent) {
-      if (!rootRef.current) return;
-      if (rootRef.current.contains(ev.target as Node)) return;
+      const boundary = boundaryRef?.current ?? rootRef.current;
+      if (!boundary) return;
+      if (boundary.contains(ev.target as Node)) return;
       onClose();
     }
     function onKey(ev: KeyboardEvent) {
@@ -46,7 +48,7 @@ export function PaletteTweaks({ open, selected, onChange, onPreview, onClose }: 
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [boundaryRef, open, onClose]);
 
   useEffect(() => {
     if (!open) {
