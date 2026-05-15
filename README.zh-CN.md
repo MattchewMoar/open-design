@@ -5,7 +5,7 @@
 >
 > 开源、agent-native 的 Figma 替代品 —— 上线两周，40k stars 在身，且仍在加速。**剩下的路，需要你和我们一起推完。**
 >
-> **正在快速推进** —— 这是 Open Design 的下一阶段，稳定后会合入 `main`。趁早进场，影响最终落地的内容。
+> **已经合入 `main`** —— 0.8.0 是 Open Design 的下一阶段，正在积极开发中。欢迎大家的贡献、想法和反馈。
 >
 > → [**读公告 · 下载安装包 · 加入这场运动**](https://github.com/nexu-io/open-design/discussions/1727) · 可与你现有的 0.7 并行安装。
 

@@ -5,7 +5,7 @@
 >
 > Uma alternativa open source e agent-native ao Figma — 40k estrelas em duas semanas nos trouxeram até aqui. **Precisamos de você para nos levar o resto do caminho.**
 >
-> **Em desenvolvimento rápido** — esta é a próxima fase do Open Design, pronta para mesclar em `main` quando estiver estável. Chegue cedo; ajude a definir o que vai entrar.
+> **Já no `main`** — 0.8.0 é a próxima fase do Open Design, em desenvolvimento ativo. Traga suas contribuições, ideias e feedback.
 >
 > → [**Leia o anúncio · baixe o instalador · junte-se ao movimento**](https://github.com/nexu-io/open-design/discussions/1727) · roda em paralelo com seu 0.7 atual.
 
