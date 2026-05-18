@@ -2562,6 +2562,11 @@ function buildCreationAgentPrompt(
   return [
     'Create this project as a complete Open Design design system workspace.',
     '',
+    'Autonomy requirement:',
+    '- Do not ask setup or clarification questions during design-system generation.',
+    '- Do not emit `<question-form>`, "Quick brief — 30 seconds", `AskUserQuestion`, direction cards, choice cards, or any UI that waits for user input.',
+    '- The setup page already collected the brief. If target surfaces, review priority, or workspace depth are missing, choose sensible defaults and begin generating the design-system artifacts immediately.',
+    '',
     'Use the files in this project as the design system source for future projects. Update `DESIGN.md` as the canonical rules document, and update supporting files when they make the system easier to review or reuse.',
     '',
     'Expected output:',

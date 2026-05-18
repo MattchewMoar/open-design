@@ -29,7 +29,7 @@ describe('composeSystemPrompt — API mode (#313)', () => {
 
     it('does not instruct agents to ask for a second visual-direction picker', () => {
       const prompt = composeSystemPrompt({});
-      expect(prompt).not.toContain('<question-form id="direction"');
+      expect(prompt).toContain('Do not emit `<question-form id="direction">`');
       expect(prompt).not.toContain('Pick a visual direction');
       expect(prompt).toContain('if a design system is active and no new brand/reference source was provided, use it as the visual direction without asking again');
     });
@@ -129,6 +129,8 @@ describe('composeSystemPrompt — API mode (#313)', () => {
       expect(skipIdx).toBeGreaterThanOrEqual(0);
       expect(skipIdx).toBeLessThan(discoveryIdx);
       expect(prompt).toMatch(/do NOT emit `?<question-form id="discovery">`?/i);
+      expect(prompt).toContain('Do not call AskUserQuestion');
+      expect(prompt).toContain('choose reasonable defaults for any missing details');
     });
   });
 });

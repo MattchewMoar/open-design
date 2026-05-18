@@ -153,6 +153,18 @@ describe('DesignSystemCreationFlow', () => {
         pendingPrompt: expect.stringContaining('Read `context/source-context.md` before drafting'),
       }),
     );
+    expect(mocks.patchProject).toHaveBeenCalledWith(
+      project.id,
+      expect.objectContaining({
+        pendingPrompt: expect.stringContaining('Do not ask setup or clarification questions during design-system generation.'),
+      }),
+    );
+    expect(mocks.patchProject).toHaveBeenCalledWith(
+      project.id,
+      expect.objectContaining({
+        pendingPrompt: expect.stringContaining('Do not emit `<question-form>`, "Quick brief — 30 seconds", `AskUserQuestion`'),
+      }),
+    );
     expect(window.sessionStorage.getItem(`od:auto-send-first:${project.id}`)).toBe('1');
     expect(onCreated).toHaveBeenCalledWith(project.id);
     expect(onSystemsRefresh).toHaveBeenCalled();
