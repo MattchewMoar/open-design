@@ -291,6 +291,9 @@
   background: var(--bg);
   color: var(--text);
 }
+.ds-workspace--generation {
+  grid-template-columns: minmax(380px, 460px) minmax(0, 1fr);
+}
 .ds-agent-rail {
   border-right: 1px solid var(--border);
   background: var(--bg-panel);

@@ -50,6 +50,7 @@ import type {
   DesignSystemProvenance,
   DesignSystemRevision,
   OpenTabsState,
+  Project,
   ProjectFile,
   ProjectMetadata,
 } from '../types';
@@ -93,6 +94,14 @@ interface SetupState {
   assetFiles: string[];
   assetFileObjects: File[];
   notes: string;
+}
+
+interface GenerationWorkspaceState {
+  project: Project;
+  files: ProjectFile[];
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  messages: ChatMessage[];
 }
 
 const EMPTY_SETUP: SetupState = {
@@ -196,6 +205,9 @@ export function DesignSystemCreationFlow({
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<DesignSystemGenerationJob | null>(null);
   const [handedOffJobId, setHandedOffJobId] = useState<string | null>(null);
+  const [generationStarting, setGenerationStarting] = useState(false);
+  const [generationWorkspace, setGenerationWorkspace] =
+    useState<GenerationWorkspaceState | null>(null);
   const composioConfigured = isComposioConfigured(config?.composio);
   const [githubConnector, setGithubConnector] = useState<ConnectorDetail | null>(null);
   const [githubConnectorLoading, setGithubConnectorLoading] = useState(false);
@@ -324,11 +336,93 @@ export function DesignSystemCreationFlow({
     }));
   }
 
+  const generationProjectFileNames = useMemo(
+    () => new Set(generationWorkspace?.files.map((file) => file.name) ?? []),
+    [generationWorkspace?.files],
+  );
+
+  const loadGenerationWorkspaceChat = useCallback(async (
+    project: Project,
+    files: ProjectFile[],
+  ): Promise<GenerationWorkspaceState> => {
+    try {
+      let conversations = await listConversations(project.id);
+      if (conversations.length === 0) {
+        const fresh = await createConversation(project.id, 'Design system');
+        conversations = fresh ? [fresh] : [];
+      }
+      const activeConversationId = conversations[0]?.id ?? null;
+      const messages = activeConversationId
+        ? await listMessages(project.id, activeConversationId)
+        : [];
+      return { project, files, conversations, activeConversationId, messages };
+    } catch {
+      return { project, files, conversations: [], activeConversationId: null, messages: [] };
+    }
+  }, []);
+
+  const mergeGenerationWorkspaceFiles = useCallback((projectId: string, files: ProjectFile[]) => {
+    const nextFiles = files.filter(Boolean);
+    if (nextFiles.length === 0) return;
+    setGenerationWorkspace((current) =>
+      current?.project.id === projectId
+        ? { ...current, files: mergeProjectFiles(current.files, nextFiles) }
+        : current,
+    );
+  }, []);
+
+  function handleSelectGenerationConversation(conversationId: string) {
+    if (!generationWorkspace || conversationId === generationWorkspace.activeConversationId) return;
+    setGenerationWorkspace((current) =>
+      current
+        ? { ...current, activeConversationId: conversationId, messages: [] }
+        : current,
+    );
+  }
+
+  async function handleNewGenerationConversation() {
+    if (!generationWorkspace) return;
+    const fresh = await createConversation(generationWorkspace.project.id, 'Design system');
+    if (!fresh) return;
+    setGenerationWorkspace((current) =>
+      current
+        ? {
+            ...current,
+            conversations: [fresh, ...current.conversations],
+            activeConversationId: fresh.id,
+            messages: [],
+          }
+        : current,
+    );
+  }
+
+  useEffect(() => {
+    if (!generationWorkspace?.project.id || !generationWorkspace.activeConversationId) {
+      return undefined;
+    }
+    const projectId = generationWorkspace.project.id;
+    const conversationId = generationWorkspace.activeConversationId;
+    let cancelled = false;
+    void listMessages(projectId, conversationId).then((messages) => {
+      if (cancelled) return;
+      setGenerationWorkspace((current) =>
+        current?.project.id === projectId && current.activeConversationId === conversationId
+          ? { ...current, messages }
+          : current,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [generationWorkspace?.activeConversationId, generationWorkspace?.project.id]);
+
   async function generate() {
-    setStep('generating');
+    if (generationStarting) return;
+    setGenerationStarting(true);
     setError(null);
     setJob(null);
     setHandedOffJobId(null);
+    setGenerationWorkspace(null);
     const title = inferDesignSystemTitle(state);
     const created = await createDesignSystemDraft({
       title,
@@ -342,19 +436,25 @@ export function DesignSystemCreationFlow({
     });
     if (!created) {
       setError('Could not generate this design system.');
+      setGenerationStarting(false);
       setStep('setup');
       return;
     }
     const workspace = await ensureDesignSystemWorkspace(created.id);
     if (!workspace) {
       setError('Could not open the design system workspace.');
+      setGenerationStarting(false);
       setStep('setup');
+      setGenerationWorkspace(null);
       return;
     }
+    setGenerationWorkspace(await loadGenerationWorkspaceChat(workspace.project, workspace.files));
+    setStep('generating');
+    setGenerationStarting(false);
     const stagedLocalCode = await stageLocalCodeFiles(workspace.project.id, state.codeFileObjects);
     const stagedFigma = await stageFigmaFiles(workspace.project.id, state.figFileObjects);
     const stagedAssets = await stageAssetFiles(workspace.project.id, state.assetFileObjects);
-    await writeProjectTextFile(
+    const sourceContextFile = await writeProjectTextFile(
       workspace.project.id,
       SOURCE_CONTEXT_MANIFEST_PATH,
       buildSourceContextManifest(state, {
@@ -365,6 +465,12 @@ export function DesignSystemCreationFlow({
         stagedAssets,
       }),
     );
+    mergeGenerationWorkspaceFiles(workspace.project.id, [
+      ...(sourceContextFile ? [sourceContextFile] : []),
+      ...stagedLocalCode.uploadedFiles,
+      ...stagedFigma.summaryFiles,
+      ...stagedAssets.uploadedFiles,
+    ]);
     const metadata = mergeLinkedCodeFolders(workspace.project.metadata, state.codeFolders);
     const prompt = buildCreationAgentPrompt(
       state,
@@ -373,6 +479,14 @@ export function DesignSystemCreationFlow({
       stagedAssets,
       stagedFigma,
     );
+    setGenerationWorkspace((current) =>
+      current?.project.id === workspace.project.id
+        ? {
+            ...current,
+            project: { ...current.project, metadata, pendingPrompt: prompt },
+          }
+        : current,
+    );
     await patchProject(workspace.project.id, { pendingPrompt: prompt, metadata });
     try {
       window.sessionStorage.setItem(`od:auto-send-first:${workspace.project.id}`, '1');
@@ -380,8 +494,8 @@ export function DesignSystemCreationFlow({
       // If sessionStorage is unavailable, the project still opens with the
       // pending prompt ready for the user to send manually.
     }
-    await onSystemsRefresh?.();
     onCreated(workspace.project.id);
+    void onSystemsRefresh?.();
   }
 
   useEffect(() => {
@@ -433,9 +547,14 @@ export function DesignSystemCreationFlow({
               <Icon name="arrow-left" />
               Back
             </button>
-            <button type="button" className="primary" onClick={() => void generate()}>
+            <button
+              type="button"
+              className="primary"
+              disabled={generationStarting}
+              onClick={() => void generate()}
+            >
               <Icon name="sparkles" />
-              Generate
+              {generationStarting ? 'Opening project...' : 'Generate'}
             </button>
           </div>
         </div>
@@ -444,35 +563,59 @@ export function DesignSystemCreationFlow({
   }
 
   if (step === 'generating') {
-    const generationSteps: DesignSystemGenerationJob['steps'] = job?.steps ?? [
-      { id: 'create-draft', title: 'Create design system project', status: 'running' },
-      { id: 'prepare-review', title: 'Open the project workspace', status: 'pending' },
-      { id: 'handoff-agent', title: 'Hand off the first design-system task to the agent', status: 'pending' },
-    ];
+    if (!generationWorkspace) {
+      return (
+        <div className="ds-setup-shell ds-setup-shell--center">
+          <div className="ds-setup-center-card">
+            <h1>Opening project workspace...</h1>
+            <p>Preparing the design system project.</p>
+          </div>
+        </div>
+      );
+    }
     const progress = job?.progress ?? 0;
     return (
-      <div className="ds-workspace">
-        <aside className="ds-agent-rail">
-          <div className="ds-agent-title">Design System</div>
-          <div className="ds-chat-block">
-            <strong>You</strong>
-            <span>Create design system</span>
+      <div className="ds-workspace ds-workspace--generation">
+        <aside className="ds-project-chat">
+          <div className="ds-project-chat__bar">
+            <button type="button" className="icon-only" onClick={onBack} aria-label="Back">
+              <Icon name="arrow-left" />
+            </button>
+            <strong>{generationWorkspace.project.name}</strong>
+            <span>Draft</span>
           </div>
-          <div className="ds-chat-block">
-            <strong>Open Design</strong>
-            <span>{job?.message ?? 'I will create a comprehensive design system from the context you provided.'}</span>
-          </div>
-          <div className="ds-todo-card">
-            <span>Updated todos</span>
-            {generationSteps.map((item) => (
-              <label key={item.id} className={`is-${item.status}`}>
-                <input type="checkbox" readOnly checked={item.status === 'succeeded'} />
-                <span>
-                  {item.title}
-                  {item.message ? <small>{item.message}</small> : null}
-                </span>
-              </label>
-            ))}
+          <div className="ds-project-chat__pane">
+            <ChatPane
+              key={`${generationWorkspace.project.id}:${generationWorkspace.activeConversationId ?? 'loading'}`}
+              messages={generationWorkspace.messages}
+              streaming={false}
+              sendDisabled
+              error={null}
+              projectId={generationWorkspace.project.id}
+              projectFiles={generationWorkspace.files}
+              hasActiveDesignSystem
+              projectFileNames={generationProjectFileNames}
+              onEnsureProject={async () => generationWorkspace.project.id}
+              onSend={() => {}}
+              onStop={() => {}}
+              conversations={generationWorkspace.conversations}
+              activeConversationId={generationWorkspace.activeConversationId}
+              onSelectConversation={handleSelectGenerationConversation}
+              onDeleteConversation={() => {}}
+              onNewConversation={() => {
+                void handleNewGenerationConversation();
+              }}
+              projectMetadata={generationWorkspace.project.metadata}
+              currentSkillId={generationWorkspace.project.skillId}
+              onProjectSkillChange={(skillId) => {
+                setGenerationWorkspace((current) =>
+                  current?.project.id === generationWorkspace.project.id
+                    ? { ...current, project: { ...current.project, skillId } }
+                    : current,
+                );
+              }}
+              researchAvailable={config?.mode === 'daemon'}
+            />
           </div>
         </aside>
         <main className="ds-generation-stage">
@@ -2387,11 +2530,13 @@ function isTrustedConnectorCallbackOrigin(origin: string, currentOrigin?: string
 
 interface StagedLocalCodeContext {
   uploadedPaths: string[];
+  uploadedFiles: ProjectFile[];
   skippedCount: number;
 }
 
 interface StagedFigmaContext {
   summaryPaths: string[];
+  summaryFiles: ProjectFile[];
   skippedCount: number;
 }
 
@@ -2409,6 +2554,7 @@ interface FigmaLocalSummary {
 
 interface StagedAssetContext {
   uploadedPaths: string[];
+  uploadedFiles: ProjectFile[];
   skippedCount: number;
 }
 
@@ -2525,33 +2671,59 @@ function mergeLinkedCodeFolders(metadata: ProjectMetadata | undefined, codeFolde
   };
 }
 
+function projectFileKey(file: ProjectFile): string {
+  return file.path ?? file.name;
+}
+
+function mergeProjectFiles(existing: ProjectFile[], incoming: ProjectFile[]): ProjectFile[] {
+  if (incoming.length === 0) return existing;
+  const merged = new Map<string, ProjectFile>();
+  for (const file of existing) {
+    merged.set(projectFileKey(file), file);
+  }
+  for (const file of incoming) {
+    merged.set(projectFileKey(file), file);
+  }
+  return [...merged.values()];
+}
+
 async function stageLocalCodeFiles(projectId: string, files: File[]): Promise<StagedLocalCodeContext> {
-  if (files.length === 0) return { uploadedPaths: [], skippedCount: 0 };
+  if (files.length === 0) return { uploadedPaths: [], uploadedFiles: [], skippedCount: 0 };
   const selected = selectLocalCodeFiles(files);
   const uploadedPaths: string[] = [];
+  const uploadedFiles: ProjectFile[] = [];
   for (const file of selected) {
     const desiredName = `${LOCAL_CODE_UPLOAD_ROOT}/${localCodeRelativePath(file)}`;
     const uploaded = await uploadProjectFile(projectId, file, desiredName);
-    if (uploaded) uploadedPaths.push(uploaded.name);
+    if (uploaded) {
+      uploadedPaths.push(uploaded.name);
+      uploadedFiles.push(uploaded);
+    }
   }
   return {
     uploadedPaths,
+    uploadedFiles,
     skippedCount: Math.max(0, files.length - selected.length),
   };
 }
 
 async function stageFigmaFiles(projectId: string, files: File[]): Promise<StagedFigmaContext> {
-  if (files.length === 0) return { summaryPaths: [], skippedCount: 0 };
+  if (files.length === 0) return { summaryPaths: [], summaryFiles: [], skippedCount: 0 };
   const selected = selectFigmaFiles(files);
   const summaryPaths: string[] = [];
+  const summaryFiles: ProjectFile[] = [];
   for (const file of selected) {
     const summary = await summarizeFigmaFile(file);
     const desiredName = `${FIGMA_CONTEXT_ROOT}/${safeContextFileName(resourceRelativePath(file), 'figma-file')}`;
     const written = await writeProjectTextFile(projectId, desiredName, renderFigmaSummary(summary));
-    if (written) summaryPaths.push(written.name);
+    if (written) {
+      summaryPaths.push(written.name);
+      summaryFiles.push(written);
+    }
   }
   return {
     summaryPaths,
+    summaryFiles,
     skippedCount: Math.max(0, files.length - selected.length),
   };
 }
@@ -2643,16 +2815,21 @@ function formatBytes(bytes: number): string {
 }
 
 async function stageAssetFiles(projectId: string, files: File[]): Promise<StagedAssetContext> {
-  if (files.length === 0) return { uploadedPaths: [], skippedCount: 0 };
+  if (files.length === 0) return { uploadedPaths: [], uploadedFiles: [], skippedCount: 0 };
   const selected = selectAssetFiles(files);
   const uploadedPaths: string[] = [];
+  const uploadedFiles: ProjectFile[] = [];
   for (const file of selected) {
     const desiredName = `${ASSET_UPLOAD_ROOT}/${resourceRelativePath(file)}`;
     const uploaded = await uploadProjectFile(projectId, file, desiredName);
-    if (uploaded) uploadedPaths.push(uploaded.name);
+    if (uploaded) {
+      uploadedPaths.push(uploaded.name);
+      uploadedFiles.push(uploaded);
+    }
   }
   return {
     uploadedPaths,
+    uploadedFiles,
     skippedCount: Math.max(0, files.length - selected.length),
   };
 }
