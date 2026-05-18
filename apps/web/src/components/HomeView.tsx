@@ -159,6 +159,7 @@ export function HomeView({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const consumedHandoffIdRef = useRef<number | null>(null);
   const pendingPromptFocusEndRef = useRef(false);
+  const activePluginApplyRequestRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -350,6 +351,8 @@ export function HomeView({
       replaceWithoutConfirmation?: boolean;
     },
   ) {
+    const applyRequestId = activePluginApplyRequestRef.current + 1;
+    activePluginApplyRequestRef.current = applyRequestId;
     const inputFields = options?.inputFields ?? record.manifest?.od?.inputs ?? [];
     const optimisticInputs = hydratePluginInputs(inputFields, options?.inputs);
     const inputsValid = pluginInputsAreValid(inputFields, optimisticInputs);
@@ -400,7 +403,8 @@ export function HomeView({
       return;
     }
 
-    const result = await resolveActivePlugin(record, optimisticInputs);
+    const result = await resolveActivePlugin(record, optimisticInputs, applyRequestId);
+    if (activePluginApplyRequestRef.current !== applyRequestId) return;
     if (!result) {
       // Roll back the optimistic active so submit can't fire against a
       // plugin that never bound. Only clear when the in-flight apply
@@ -459,11 +463,14 @@ export function HomeView({
   async function resolveActivePlugin(
     record: InstalledPluginRecord,
     inputs: Record<string, unknown>,
+    applyRequestId?: number,
   ): Promise<ApplyResult | null> {
     setPendingApplyId(record.id);
     const result = await applyPlugin(record.id, { locale, inputs });
-    setPendingApplyId(null);
-    setPendingChipId(null);
+    if (applyRequestId === undefined || activePluginApplyRequestRef.current === applyRequestId) {
+      setPendingApplyId(null);
+      setPendingChipId(null);
+    }
     return result;
   }
 
