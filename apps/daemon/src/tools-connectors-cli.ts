@@ -553,6 +553,7 @@ async function collectGithubEvidenceWithConnector(
       repo: repo.repo,
     });
   } catch (error) {
+    if (!connectorIntakeIsRecoverable(error)) throw error;
     warnings.push(
       `Repository metadata connector read failed; continuing with ${
         options.ref ?? 'main'
@@ -634,7 +635,7 @@ async function collectGithubEvidenceWithConnector(
 
 async function collectGithubEvidenceWithGitClone(
   repo: ParsedGitHubRepo,
-  options: { ref?: string; maxFiles: number; reason: string },
+  options: { ref?: string; maxFiles: number; reason: string; warnings?: string[] },
 ): Promise<GithubDesignEvidence> {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'od-github-context-'));
   const cloneDir = path.join(tmpDir, 'repo');
@@ -674,11 +675,28 @@ async function collectGithubEvidenceWithGitClone(
       ...(readme === undefined ? {} : { readme }),
       treePaths: paths,
       files,
-      warnings: [`Connector intake failed; used shallow git clone fallback. Reason: ${options.reason}`],
+      warnings: [
+        ...(options.warnings ?? []),
+        `Connector intake could not produce enough local snapshots; used shallow git clone fallback. Reason: ${options.reason}`,
+      ],
     };
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
+}
+
+function connectorIntakeIsRecoverable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/\b(ACCESS_DENIED|NOT_FOUND|FORBIDDEN|UNAUTHORIZED)\b|access denied|repository not found|not found|forbidden|permission|unauthorized|\b40[134]\b/iu.test(message)) {
+    return false;
+  }
+  return /\b(CONNECTOR_OUTPUT_TOO_LARGE|CONNECTOR_RATE_LIMITED)\b/u.test(message)
+    || /did not produce readable repository evidence/iu.test(message)
+    || /produced no snapshot files/iu.test(message);
+}
+
+function connectorEvidenceNeedsCloneFallback(evidence: GithubDesignEvidence): boolean {
+  return evidence.files.length === 0;
 }
 
 async function execGit(args: string[]): Promise<void> {
@@ -806,8 +824,16 @@ async function runGithubDesignContext(options: ParsedOptions): Promise<ToolCliRe
         ...(options.ref === undefined ? {} : { ref: options.ref }),
         maxFiles,
       });
+      if (connectorEvidenceNeedsCloneFallback(evidence)) {
+        evidence = await collectGithubEvidenceWithGitClone(repo, {
+          ...(options.ref === undefined ? {} : { ref: options.ref }),
+          maxFiles,
+          reason: 'GitHub connector bounded intake produced no snapshot files.',
+          warnings: evidence.warnings,
+        });
+      }
     } catch (error) {
-      if (options.requireConnector) {
+      if (options.requireConnector && !connectorIntakeIsRecoverable(error)) {
         return fail('GitHub connector intake is required and could not read the repository', {
           repo: `${repo.owner}/${repo.repo}`,
           reason: error instanceof Error ? error.message : String(error),

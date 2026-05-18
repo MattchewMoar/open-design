@@ -829,13 +829,13 @@ describe('DesignSystemCreationFlow', () => {
     expect(mocks.patchProject).toHaveBeenCalledWith(
       project.id,
       expect.objectContaining({
-        pendingPrompt: expect.stringContaining('If you already hit `CONNECTOR_OUTPUT_TOO_LARGE` from a direct connector call, do not stop and do not retry the same direct tool.'),
+        pendingPrompt: expect.stringContaining('If you already hit `CONNECTOR_OUTPUT_TOO_LARGE` or `CONNECTOR_RATE_LIMITED` from a direct connector call, do not stop and do not retry the same direct tool.'),
       }),
     );
     expect(mocks.patchProject).toHaveBeenCalledWith(
       project.id,
       expect.objectContaining({
-        pendingPrompt: expect.stringContaining('Do not substitute public GitHub fallback, web browsing, memory, or URL-only inference.'),
+        pendingPrompt: expect.stringContaining('The command may use a shallow git clone fallback after connector output is rate-limited or oversized.'),
       }),
     );
   });

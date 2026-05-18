@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -324,6 +324,96 @@ describe('connectors tool CLI', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
+  it('uses shallow git clone fallback when connector rate limits all snapshot file reads', async () => {
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'od-connectors-cli-'));
+    process.chdir(tmpDir);
+    process.env.OD_DAEMON_URL = 'http://127.0.0.1:7456';
+    process.env.OD_TOOL_TOKEN = 'agent-run-token';
+
+    const fakeBinDir = path.join(tmpDir, 'bin');
+    await mkdir(fakeBinDir, { recursive: true });
+    const fakeGitPath = path.join(fakeBinDir, 'git');
+    await writeFile(fakeGitPath, `#!/bin/sh
+for last do :; done
+mkdir -p "$last/src"
+cat > "$last/README.md" <<'EOF'
+# Fallback UI
+EOF
+cat > "$last/package.json" <<'EOF'
+{"dependencies":{"@radix-ui/react-dialog":"latest"}}
+EOF
+cat > "$last/src/styles.css" <<'EOF'
+:root { --color-brand: #dc5b3e; --radius-md: 10px; }
+EOF
+`, 'utf8');
+    await chmod(fakeGitPath, 0o755);
+    process.env.PATH = `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ''}`;
+
+    const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64');
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        connectors: [{
+          id: 'github',
+          name: 'GitHub',
+          provider: 'composio',
+          category: 'Developer',
+          status: 'connected',
+          tools: [{ name: 'github.github_get_repository_content' }],
+        }],
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        output: { data: { default_branch: 'main', html_url: 'https://github.com/acme/rate-limited-ui' } },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        output: { data: { path: 'README.md', encoding: 'base64', content: encode('# Connector README') } },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { code: 'CONNECTOR_OUTPUT_TOO_LARGE', message: 'connector output exceeds max serialized size' },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 502 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        output: { data: { content: [
+          { path: 'package.json', type: 'file' },
+          { path: 'src', type: 'dir' },
+        ] } },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        output: { data: { content: [
+          { path: 'src/styles.css', type: 'file' },
+        ] } },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { code: 'CONNECTOR_RATE_LIMITED', message: 'connector tool rate limit exceeded' },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { code: 'CONNECTOR_RATE_LIMITED', message: 'connector tool rate limit exceeded' },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 429 }));
+
+    const result = await runConnectorsToolCli(['github-design-context', '--repo', 'acme/rate-limited-ui', '--max-files', '3', '--require-connector']);
+
+    expect(result.exitCode).toBe(0);
+    const stdout = JSON.parse(stdoutOutput.join(''));
+    expect(stdout).toEqual(expect.objectContaining({
+      ok: true,
+      method: 'git-clone-fallback',
+      snapshotFiles: expect.arrayContaining([
+        'context/github/acme-rate-limited-ui/files/package.json',
+        'context/github/acme-rate-limited-ui/files/src/styles.css',
+      ]),
+      warnings: expect.arrayContaining([
+        expect.stringContaining('CONNECTOR_RATE_LIMITED'),
+        expect.stringContaining('GitHub connector bounded intake produced no snapshot files.'),
+      ]),
+    }));
+    await expect(readFile(path.join(tmpDir, 'context/github/acme-rate-limited-ui.md'), 'utf8')).resolves.toContain('shallow local git clone fallback');
+    await expect(readFile(path.join(tmpDir, 'context/github/acme-rate-limited-ui/files/src/styles.css'), 'utf8')).resolves.toContain('--color-brand');
+
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
   it('fails instead of using public fallback when GitHub connector intake is required', async () => {
     const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'od-connectors-cli-'));
     process.chdir(tmpDir);
@@ -350,7 +440,7 @@ describe('connectors tool CLI', () => {
     expect(stderrOutput.join('')).toContain('GitHub connector intake is required and could not read the repository');
     expect(stderrOutput.join('')).toContain('repository access denied');
     await expect(readFile(path.join(tmpDir, 'context/github/acme-private-ui.md'), 'utf8')).rejects.toThrow();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await rm(tmpDir, { recursive: true, force: true });
   });
