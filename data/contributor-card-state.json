@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-21T13:50:51.006Z",
+  "generatedAt": "2026-05-21T14:20:50.384Z",
   "contributors": {
     "huyhoangnhh98": {
       "lastAnnouncedTier": "spark",
@@ -31,8 +31,8 @@
     },
     "nettee": {
       "lastAnnouncedTier": "beacon",
-      "lastKnownScore": 900,
-      "lastCheckedAt": "2026-05-21T11:08:22.185Z",
+      "lastKnownScore": 928,
+      "lastCheckedAt": "2026-05-21T14:20:50.383Z",
       "scoreVersion": "weighted-v1",
       "lastAnnouncedAt": "2026-05-19T10:03:39.557Z"
     },
