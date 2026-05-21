@@ -50,6 +50,43 @@ type TranslateFn = (
 
 const DISCORD_INVITE_URL = "https://discord.gg/mHAjSMV6gz";
 
+interface ActionNotice {
+  message: string;
+  url?: string;
+}
+
+function buildActionNotice(message: string, url?: string): ActionNotice {
+  const trimmedMessage = message.trim();
+  const trimmedUrl = url?.trim();
+  if (!trimmedUrl) return { message: trimmedMessage };
+  const normalizedMessage = trimmedMessage.replace(
+    new RegExp(`\\s*${escapeRegExp(trimmedUrl)}\\s*$`),
+    "",
+  );
+  return { message: normalizedMessage.trim() || trimmedUrl, url: trimmedUrl };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function ActionNoticeView({ notice }: { notice: ActionNotice | null }) {
+  if (!notice) return null;
+  return (
+    <>
+      <span>{notice.message}</span>
+      {notice.url ? (
+        <>
+          {" "}
+          <a href={notice.url} target="_blank" rel="noreferrer">
+            {notice.url}
+          </a>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 interface Props {
   message: ChatMessage;
   streaming: boolean;
@@ -65,7 +102,9 @@ interface Props {
   onRequestPluginFolderAgentAction?: (
     relativePath: string,
     action: PluginFolderAgentAction,
-  ) => Promise<void> | void;
+  ) => Promise<{ message?: string; url?: string } | void> | { message?: string; url?: string } | void;
+  activePluginActionPaths?: Set<string>;
+  hiddenPluginActionPaths?: Set<string>;
   // True only for the most recent assistant message — gate question-form
   // interactivity on this so older forms render as a locked "answered"
   // capsule instead of being re-submittable.
@@ -102,6 +141,8 @@ export function AssistantMessage({
   projectFileNames,
   onRequestOpenFile,
   onRequestPluginFolderAgentAction,
+  activePluginActionPaths = new Set(),
+  hiddenPluginActionPaths = new Set(),
   isLast,
   nextUserContent,
   onSubmitForm,
@@ -142,8 +183,9 @@ export function AssistantMessage({
     () =>
       !streaming && isLast && projectId
         ? pluginFoldersTouchedThisTurn(projectFiles, fileOps, displayedProduced, message.content)
+            .filter((folder) => !hiddenPluginActionPaths.has(folder.path))
         : [],
-    [displayedProduced, fileOps, isLast, message.content, projectFiles, projectId, streaming],
+    [displayedProduced, fileOps, hiddenPluginActionPaths, isLast, message.content, projectFiles, projectId, streaming],
   );
   const usage = events.find((e) => e.kind === "usage") as
     | Extract<AgentEvent, { kind: "usage" }>
@@ -937,16 +979,18 @@ function PluginActionPanel({
   folders,
   onRequestOpenFile,
   onRequestPluginFolderAgentAction,
+  activePluginActionPaths = new Set(),
 }: {
   folders: PluginFolderCandidate[];
   onRequestOpenFile?: (name: string) => void;
   onRequestPluginFolderAgentAction?: (
     relativePath: string,
     action: PluginFolderAgentAction,
-  ) => Promise<void> | void;
+  ) => Promise<{ message?: string; url?: string } | void> | { message?: string; url?: string } | void;
+  activePluginActionPaths?: Set<string>;
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [noticeByFolder, setNoticeByFolder] = useState<Record<string, string>>(
+  const [noticeByFolder, setNoticeByFolder] = useState<Record<string, ActionNotice>>(
     {},
   );
 
@@ -963,10 +1007,23 @@ function PluginActionPanel({
       return next;
     });
     try {
-      await onRequestPluginFolderAgentAction(folder.path, action);
+      const outcome = await onRequestPluginFolderAgentAction(folder.path, action);
+      const url = outcome && typeof outcome === 'object' && typeof outcome.url === 'string'
+        ? outcome.url
+        : '';
+      const message = outcome && typeof outcome === 'object' && typeof outcome.message === 'string'
+        ? outcome.message
+        : '';
+      if (message || url) {
+        setNoticeByFolder((prev) => ({
+          ...prev,
+          [folder.path]: buildActionNotice(message || url, url),
+        }));
+      }
+    } catch (err) {
       setNoticeByFolder((prev) => ({
         ...prev,
-        [folder.path]: "Sent to the agent. The CLI run will continue in chat.",
+        [folder.path]: { message: err instanceof Error ? err.message : String(err) },
       }));
     } finally {
       setBusyKey(null);
@@ -987,7 +1044,9 @@ function PluginActionPanel({
         </div>
       </div>
       <div className="plugin-action-panel__list">
-        {folders.map((folder) => (
+        {folders.map((folder) => {
+          const actionBusy = activePluginActionPaths.has(folder.path);
+          return (
           <div
             key={folder.path}
             className="plugin-action-card"
@@ -1002,73 +1061,73 @@ function PluginActionPanel({
                 <span>{folder.fileCount} files ready for My plugins</span>
               </div>
             </div>
-            <div className="plugin-action-card__actions">
-              <button
-                type="button"
-                className="plugin-action-button plugin-action-button--primary"
-                data-testid={`assistant-plugin-install-${folder.path}`}
-                disabled={busyKey !== null || !onRequestPluginFolderAgentAction}
-                onClick={() => void runAction(folder, "install")}
-              >
-                <Icon
-                  name={busyKey === `install:${folder.path}` ? "spinner" : "plus"}
-                  size={13}
-                />
-                <span>
-                  {busyKey === `install:${folder.path}` ? "Sending..." : "Add to My plugins"}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="plugin-action-button"
-                data-testid={`assistant-plugin-publish-${folder.path}`}
-                disabled={busyKey !== null || !onRequestPluginFolderAgentAction}
-                onClick={() => void runAction(folder, "publish")}
-              >
-                <Icon
-                  name={busyKey === `publish:${folder.path}` ? "spinner" : "github"}
-                  size={13}
-                />
-                <span>
-                  {busyKey === `publish:${folder.path}` ? "Sending..." : "Publish repo"}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="plugin-action-button"
-                data-testid={`assistant-plugin-contribute-${folder.path}`}
-                disabled={busyKey !== null || !onRequestPluginFolderAgentAction}
-                onClick={() => void runAction(folder, "contribute")}
-              >
-                <Icon
-                  name={busyKey === `contribute:${folder.path}` ? "spinner" : "share"}
-                  size={13}
-                />
-                <span>
-                  {busyKey === `contribute:${folder.path}`
-                    ? "Sending..."
-                    : "Open Design PR"}
-                </span>
-              </button>
-              {onRequestOpenFile ? (
+              <div className="plugin-action-card__actions">
+                <button
+                  type="button"
+                  className="plugin-action-button plugin-action-button--primary"
+                  data-testid={`assistant-plugin-install-${folder.path}`}
+                  disabled={actionBusy || busyKey !== null || !onRequestPluginFolderAgentAction}
+                  onClick={() => void runAction(folder, "install")}
+                >
+                  <Icon
+                    name={actionBusy && busyKey === `install:${folder.path}` ? "spinner" : "plus"}
+                    size={13}
+                  />
+                  <span>
+                    {actionBusy && busyKey === `install:${folder.path}` ? "Sending..." : "Add to My plugins"}
+                  </span>
+                </button>
                 <button
                   type="button"
                   className="plugin-action-button"
-                  data-testid={`assistant-plugin-open-manifest-${folder.path}`}
-                  onClick={() => onRequestOpenFile(folder.manifestPath)}
+                  data-testid={`assistant-plugin-publish-${folder.path}`}
+                  disabled={actionBusy || busyKey !== null || !onRequestPluginFolderAgentAction}
+                  onClick={() => void runAction(folder, "publish")}
                 >
-                  <Icon name="file-code" size={13} />
-                  <span>Open manifest</span>
+                  <Icon
+                    name={actionBusy && busyKey === `publish:${folder.path}` ? "spinner" : "github"}
+                    size={13}
+                  />
+                  <span>
+                    {actionBusy && busyKey === `publish:${folder.path}` ? "Sending..." : "Publish repo"}
+                  </span>
                 </button>
-              ) : null}
-            </div>
+                <button
+                  type="button"
+                  className="plugin-action-button"
+                  data-testid={`assistant-plugin-contribute-${folder.path}`}
+                  disabled={actionBusy || busyKey !== null || !onRequestPluginFolderAgentAction}
+                  onClick={() => void runAction(folder, "contribute")}
+                >
+                  <Icon
+                    name={actionBusy && busyKey === `contribute:${folder.path}` ? "spinner" : "share"}
+                    size={13}
+                  />
+                  <span>
+                    {actionBusy && busyKey === `contribute:${folder.path}`
+                      ? "Sending..."
+                      : "Open Design PR"}
+                  </span>
+                </button>
+                {onRequestOpenFile ? (
+                  <button
+                    type="button"
+                    className="plugin-action-button"
+                    data-testid={`assistant-plugin-open-manifest-${folder.path}`}
+                    onClick={() => onRequestOpenFile(folder.manifestPath)}
+                  >
+                    <Icon name="file-code" size={13} />
+                    <span>Open manifest</span>
+                  </button>
+                ) : null}
+              </div>
             {noticeByFolder[folder.path] ? (
               <div className="plugin-action-card__notice" role="status">
-                {noticeByFolder[folder.path]}
+                <ActionNoticeView notice={noticeByFolder[folder.path] ?? null} />
               </div>
             ) : null}
           </div>
-        ))}
+        )})}
       </div>
     </div>
   );

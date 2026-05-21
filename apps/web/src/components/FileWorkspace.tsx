@@ -84,7 +84,9 @@ interface Props {
   onPluginFolderAgentAction?: (
     relativePath: string,
     action: PluginFolderAgentAction,
-  ) => Promise<void> | void;
+  ) => Promise<{ message?: string; url?: string } | void> | { message?: string; url?: string } | void;
+  activePluginActionPaths?: Set<string>;
+  hiddenPluginActionPaths?: Set<string>;
   focusMode?: boolean;
   onFocusModeChange?: (next: boolean) => void;
   designSystemProject?: DesignSystemSummary | null;
@@ -205,6 +207,8 @@ export function FileWorkspace({
   onRemovePreviewComment,
   onSendBoardCommentAttachments,
   onPluginFolderAgentAction,
+  activePluginActionPaths,
+  hiddenPluginActionPaths,
   focusMode = false,
   onFocusModeChange,
   designSystemProject = null,
@@ -1016,6 +1020,8 @@ export function FileWorkspace({
             uploadError={uploadError}
             onClearUploadError={() => setUploadError(null)}
             onPluginFolderAgentAction={onPluginFolderAgentAction}
+            activePluginActionPaths={activePluginActionPaths}
+            hiddenPluginActionPaths={hiddenPluginActionPaths}
           />
         ) : isActiveSketch && activeSketch && activeFile ? (
           activeSketch.loaded ? (
