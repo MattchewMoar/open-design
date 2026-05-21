@@ -186,10 +186,12 @@ export interface AgentRefreshOptions {
 function codexPathStrings(locale: Locale) {
   if (locale === 'zh-CN') {
     return {
-      repairHint: '当前保存的 Codex 路径不适合继续使用。',
-      useDetected: '使用检测到的 Codex',
+      repairHint: '将此 Codex 可执行文件路径保存到执行设置。',
+      useDetected: '保存 Codex 路径',
       clearCustom: '清空自定义路径',
       configuredSuccess: (path: string) => `本次测试使用的是已配置的 Codex 路径：${path}。`,
+      detectedSuccess: (path: string) =>
+        `本次测试使用的是检测到的 Codex 路径：${path}。请将此路径保存到执行设置，以便 macOS 应用启动时使用同一个可执行文件。`,
       invalidFallback: (configuredPath: string, detectedPath: string) =>
         `已配置的 Codex 路径无效或不可执行：${configuredPath}。本次测试改用 PATH 中的 Codex CLI：${detectedPath}。建议更新 CODEX_BIN 或清空自定义路径。`,
       failedFallback: (configuredPath: string, detectedPath: string) =>
@@ -198,10 +200,12 @@ function codexPathStrings(locale: Locale) {
   }
   if (locale === 'zh-TW') {
     return {
-      repairHint: '目前儲存的 Codex 路徑不適合繼續使用。',
-      useDetected: '使用偵測到的 Codex',
+      repairHint: '將此 Codex 可執行檔路徑儲存到執行設定。',
+      useDetected: '儲存 Codex 路徑',
       clearCustom: '清除自訂路徑',
       configuredSuccess: (path: string) => `本次測試使用的是已設定的 Codex 路徑：${path}。`,
+      detectedSuccess: (path: string) =>
+        `本次測試使用的是偵測到的 Codex 路徑：${path}。請將此路徑儲存到執行設定，以便 macOS 應用程式啟動時使用同一個可執行檔。`,
       invalidFallback: (configuredPath: string, detectedPath: string) =>
         `已設定的 Codex 路徑無效或不可執行：${configuredPath}。本次測試改用 PATH 中的 Codex CLI：${detectedPath}。建議更新 CODEX_BIN 或清除自訂路徑。`,
       failedFallback: (configuredPath: string, detectedPath: string) =>
@@ -209,11 +213,13 @@ function codexPathStrings(locale: Locale) {
     };
   }
   return {
-    repairHint: 'The saved Codex path is not the binary this test should keep using.',
-    useDetected: 'Use detected Codex',
+    repairHint: 'Save this Codex executable path in Execution settings.',
+    useDetected: 'Save Codex path',
     clearCustom: 'Clear custom path',
     configuredSuccess: (path: string) =>
       `This test used the configured Codex path: ${path}.`,
+    detectedSuccess: (path: string) =>
+      `This test used the detected Codex path: ${path}. Save this path in Execution settings so macOS app launches use the same executable.`,
     invalidFallback: (configuredPath: string, detectedPath: string) =>
       `Configured Codex path is invalid or not executable: ${configuredPath}. This test used the PATH Codex CLI at ${detectedPath}. Update CODEX_BIN or clear the custom path to use the detected binary.`,
     failedFallback: (configuredPath: string, detectedPath: string) =>
@@ -664,18 +670,25 @@ function apiModelOptionLabel(model: ProviderModelOption): string {
     : model.id;
 }
 
-function codexPathRepairState(
+export function codexPathRepairState(
+  cfg: AppConfig,
   result: ConnectionTestResponse,
 ): { detectedPath: string; canUseDetected: boolean } | null {
   if (!result.ok) return null;
   if (
+    result.usedExecutableSource !== 'path' &&
     result.usedExecutableSource !== 'fallback_invalid' &&
     result.usedExecutableSource !== 'fallback_failed'
   ) {
     return null;
   }
-  const detectedPath = result.detectedExecutablePath?.trim() || '';
+  const detectedPath =
+    result.usedExecutablePath?.trim() ||
+    result.detectedExecutablePath?.trim() ||
+    '';
   if (!detectedPath) return null;
+  const savedPath = cfg.agentCliEnv?.codex?.CODEX_BIN?.trim() || '';
+  if (savedPath === detectedPath) return null;
   return {
     detectedPath,
     canUseDetected: true,
@@ -1417,6 +1430,12 @@ export function SettingsDialog({
           result.configuredExecutablePath
         ) {
           return `${baseMessage} ${codexStrings.configuredSuccess(result.configuredExecutablePath)}`;
+        }
+        if (
+          result.usedExecutableSource === 'path' &&
+          result.usedExecutablePath
+        ) {
+          return `${baseMessage} ${codexStrings.detectedSuccess(result.usedExecutablePath)}`;
         }
         if (
           result.usedExecutableSource === 'fallback_invalid' &&
@@ -2487,6 +2506,7 @@ export function SettingsDialog({
                                     ) : null}
                                     {cfg.agentId === 'codex' && (() => {
                                       const repair = codexPathRepairState(
+                                        cfg,
                                         agentTestState.result,
                                       );
                                       if (!repair) return null;

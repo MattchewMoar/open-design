@@ -258,6 +258,12 @@ function codexConfiguredPathSuccessDetail(
   return `This test used the configured Codex path: ${configuredOverridePath}.`;
 }
 
+function codexDetectedPathSuccessDetail(
+  usedExecutablePath: string,
+): string {
+  return `This test used the detected Codex path: ${usedExecutablePath}. Save this path in Execution settings so macOS app launches use the same executable.`;
+}
+
 function codexInvalidConfiguredPathFallbackDetail(
   configuredValue: string,
   pathResolvedPath: string,
@@ -1572,7 +1578,7 @@ export async function testAgentConnection(
   if (
     input.agentId === 'codex' &&
     primaryResult.ok &&
-    configuredCodexBin
+    (configuredCodexBin || executableResolution.pathResolvedPath)
   ) {
     if (executableResolution.configuredOverridePath) {
       return {
@@ -1590,7 +1596,7 @@ export async function testAgentConnection(
         ),
       };
     }
-    if (executableResolution.pathResolvedPath) {
+    if (configuredCodexBin && executableResolution.pathResolvedPath) {
       return {
         ...primaryResult,
         configuredExecutablePath: configuredCodexBin,
@@ -1602,6 +1608,18 @@ export async function testAgentConnection(
             configuredCodexBin,
             executableResolution.pathResolvedPath,
           ),
+        ),
+      };
+    }
+    if (executableResolution.pathResolvedPath) {
+      const usedExecutablePath = executableResolution.launchPath ?? executableResolution.pathResolvedPath;
+      return {
+        ...primaryResult,
+        detectedExecutablePath: executableResolution.pathResolvedPath,
+        usedExecutablePath,
+        usedExecutableSource: 'path',
+        detail: redactSecrets(
+          codexDetectedPathSuccessDetail(usedExecutablePath),
         ),
       };
     }

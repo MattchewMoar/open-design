@@ -3,6 +3,7 @@ import {
   agentRefreshOptionsForConfig,
   canFetchProviderModels,
   canRunProviderConnectionTest,
+  codexPathRepairState,
   deriveComposioCredentialState,
   configForManualOrbitRun,
   isOrbitRunDisabled,
@@ -396,6 +397,43 @@ describe('SettingsDialog agent CLI env settings', () => {
       throwOnError: true,
       agentCliEnv: {},
     });
+  });
+
+  it('offers to save the detected Codex launch path when no executable path is configured', () => {
+    const result: ConnectionTestResponse = {
+      ok: true,
+      kind: 'success',
+      latencyMs: 12,
+      agentName: 'Codex CLI',
+      usedExecutableSource: 'path',
+      detectedExecutablePath: '/opt/homebrew/bin/codex',
+      usedExecutablePath: '/Users/test/.npm/_npx/codex-native',
+    };
+
+    expect(codexPathRepairState(baseConfig, result)).toEqual({
+      detectedPath: '/Users/test/.npm/_npx/codex-native',
+      canUseDetected: true,
+    });
+  });
+
+  it('does not offer a Codex path action when the used executable is already saved', () => {
+    const config: AppConfig = {
+      ...baseConfig,
+      agentCliEnv: {
+        codex: { CODEX_BIN: '/Users/test/bin/codex' },
+      },
+    };
+    const result: ConnectionTestResponse = {
+      ok: true,
+      kind: 'success',
+      latencyMs: 12,
+      agentName: 'Codex CLI',
+      usedExecutableSource: 'path',
+      detectedExecutablePath: '/opt/homebrew/bin/codex',
+      usedExecutablePath: '/Users/test/bin/codex',
+    };
+
+    expect(codexPathRepairState(config, result)).toBeNull();
   });
 });
 

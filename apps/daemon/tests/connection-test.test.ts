@@ -86,6 +86,14 @@ async function withFakeCodex<T>(script: string, run: () => Promise<T>): Promise<
   return withFakeAgent('codex', script, run);
 }
 
+function codexNativeTargetTripleForTest(): string {
+  if (process.platform === 'darwin' && process.arch === 'arm64') return 'aarch64-apple-darwin';
+  if (process.platform === 'darwin' && process.arch === 'x64') return 'x86_64-apple-darwin';
+  if (process.platform === 'linux' && process.arch === 'arm64') return 'aarch64-unknown-linux-musl';
+  if (process.platform === 'linux' && process.arch === 'x64') return 'x86_64-unknown-linux-musl';
+  return `${process.platform}-${process.arch}`;
+}
+
 async function withFakeClaude<T>(script: string, run: () => Promise<T>): Promise<T> {
   return withFakeAgent('claude', script, run);
 }
@@ -1168,6 +1176,80 @@ setImmediate(() => process.exit(0));
         });
       },
     );
+  });
+
+  it('returns the Codex executable path that successful connection tests should save', async () => {
+    await withFakeCodex(
+      `
+console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } }));
+setImmediate(() => process.exit(0));
+`,
+      async () => {
+        const result = await testAgentConnection({ agentId: 'codex' });
+
+        expect(result).toMatchObject({
+          ok: true,
+          kind: 'success',
+          agentName: 'Codex CLI',
+          usedExecutableSource: 'path',
+          detectedExecutablePath: expect.any(String),
+          usedExecutablePath: expect.any(String),
+        });
+        expect(result.detail).toContain('Save this path in Execution settings');
+      },
+    );
+  });
+
+  it('reports the native Codex launch path instead of the PATH wrapper when available', async () => {
+    if (process.platform === 'win32') return;
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'od-conn-test-codex-native-'));
+    const oldPath = process.env.PATH;
+    try {
+      const wrapperPkgDir = path.join(root, 'node_modules', '@openai', 'codex');
+      const wrapperRealPath = path.join(wrapperPkgDir, 'bin', 'codex.js');
+      const wrapperLinkDir = path.join(root, 'node_modules', '.bin');
+      const wrapperLinkPath = path.join(wrapperLinkDir, 'codex');
+      const nativeBin = path.join(
+        root,
+        'node_modules',
+        '@openai',
+        `codex-${process.platform}-${process.arch}`,
+        'vendor',
+        codexNativeTargetTripleForTest(),
+        'codex',
+        'codex',
+      );
+      await fsp.mkdir(path.dirname(wrapperRealPath), { recursive: true });
+      await fsp.mkdir(wrapperLinkDir, { recursive: true });
+      await fsp.mkdir(path.dirname(nativeBin), { recursive: true });
+      await fsp.writeFile(wrapperRealPath, '#!/usr/bin/env node\nrequire("@openai/codex");\n');
+      await fsp.writeFile(
+        nativeBin,
+        `#!/usr/bin/env node
+console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } }));
+setImmediate(() => process.exit(0));
+`,
+      );
+      await fsp.chmod(wrapperRealPath, 0o755);
+      await fsp.chmod(nativeBin, 0o755);
+      await fsp.symlink(wrapperRealPath, wrapperLinkPath);
+      process.env.PATH = `${wrapperLinkDir}${path.delimiter}${oldPath ?? ''}`;
+
+      const result = await testAgentConnection({ agentId: 'codex' });
+
+      expect(result).toMatchObject({
+        ok: true,
+        kind: 'success',
+        agentName: 'Codex CLI',
+        usedExecutableSource: 'path',
+        detectedExecutablePath: wrapperLinkPath,
+        usedExecutablePath: nativeBin,
+      });
+      expect(result.detail).toContain(nativeBin);
+    } finally {
+      process.env.PATH = oldPath;
+      await fsp.rm(root, { recursive: true, force: true });
+    }
   });
 
   it('spawns agent tests with draft allowlisted CLI env', async () => {
