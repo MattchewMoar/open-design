@@ -41,6 +41,7 @@ export function AvatarMenu({
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -49,7 +50,10 @@ export function AvatarMenu({
       if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKey);
@@ -82,6 +86,7 @@ export function AvatarMenu({
   return (
     <div className="avatar-menu" ref={wrapRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="avatar-agent-trigger"
         onClick={() => setOpen((v) => !v)}
