@@ -139,6 +139,7 @@ export function BoardComposerPopover({
   sending,
   t,
   scale = 1,
+  docked = false,
 }: {
   target: PreviewCommentSnapshot;
   existing: PreviewComment | null;
@@ -156,17 +157,18 @@ export function BoardComposerPopover({
   sending: boolean;
   t: TranslateFn;
   scale?: number;
+  docked?: boolean;
 }) {
   const pendingCount = notes.length + (draft.trim() ? 1 : 0);
   const podMembers = target.podMembers ?? [];
   return (
     <div
-      className="comment-popover"
+      className={`comment-popover${docked ? ' comment-popover-docked' : ''}`}
       data-testid="comment-popover"
       role="dialog"
       aria-modal="false"
       aria-label="Annotation"
-      style={popoverAnchorStyle(target, scale)}
+      style={docked ? undefined : popoverAnchorStyle(target, scale)}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();

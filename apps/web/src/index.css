@@ -1925,6 +1925,41 @@ a.avatar-item:visited {
   padding-top: 0;
   padding-bottom: 32px;
 }
+.comment-left-host {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+.comment-left-host > .comment-side-panel {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 20;
+}
+.comment-left-host .comment-side-header {
+  min-height: 40px;
+}
+.comment-left-host .comment-side-list {
+  padding: 16px 12px;
+}
+.comment-side-composer {
+  flex: 0 0 auto;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
 .split-resize-handle:hover,
 .split-resize-handle:focus-visible,
 .split.is-resizing-chat .split-resize-handle {
@@ -11981,21 +12016,6 @@ button.connector-action.is-loading {
   height: 100%;
   min-height: 0;
 }
-.comment-preview-layer-comments-open.preview-viewport-desktop {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 0;
-  overflow: hidden;
-}
-.comment-preview-layer-comments-collapsed.preview-viewport-desktop {
-  grid-template-columns: minmax(0, 1fr) 42px;
-}
-.comment-preview-layer-comments-open.preview-viewport-desktop .comment-frame-clip {
-  position: relative;
-  inset: auto;
-  min-width: 0;
-  min-height: 0;
-}
 .preview-viewport:not(.preview-viewport-desktop) {
   overflow: auto;
   display: flex;
@@ -12308,6 +12328,26 @@ button.connector-action.is-loading {
   max-height: 120px;
   resize: vertical;
 }
+.comment-popover-docked {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.comment-popover-docked textarea {
+  min-height: 92px;
+  max-height: 180px;
+}
+.comment-popover-placeholder textarea {
+  cursor: default;
+  opacity: 0.72;
+}
 .comment-popover-actions {
   display: flex;
   justify-content: space-between;
@@ -12367,9 +12407,8 @@ button.connector-action.is-loading {
   border-color: var(--red-border);
 }
 
-/* Right-side comment thread panel. Shown while board (comment) mode
-   is on; takes the place of the chat sidebar's removed Comments tab.
-   Floats over the artifact preview at the right edge. */
+/* Floating comment thread panel for focused artifact mode. In the project
+   split view it is portaled into the left chat slot. */
 .comment-side-panel {
   position: absolute;
   top: 8px;
@@ -12385,21 +12424,6 @@ button.connector-action.is-loading {
   flex-direction: column;
   z-index: 30;
   overflow: hidden;
-}
-.comment-preview-layer-comments-open.preview-viewport-desktop .comment-side-panel {
-  position: relative;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  width: 100%;
-  max-width: none;
-  min-height: 0;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  border-radius: 0;
-  box-shadow: none;
-  z-index: 20;
 }
 .comment-side-header {
   display: flex;
@@ -12461,20 +12485,6 @@ button.connector-action.is-loading {
   color: var(--text-muted);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-}
-.comment-preview-layer-comments-collapsed.preview-viewport-desktop .comment-side-rail {
-  position: relative;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  width: 100%;
-  height: 100%;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  border-radius: 0;
-  box-shadow: none;
-  z-index: 20;
 }
 .comment-side-rail:hover {
   color: var(--text);

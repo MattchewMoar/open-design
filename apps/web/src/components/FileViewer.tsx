@@ -610,6 +610,8 @@ interface Props {
   onFileSaved?: () => Promise<void> | void;
   manualEditPortalId?: string;
   onManualEditModeChange?: (active: boolean) => void;
+  commentPortalId?: string;
+  onCommentModeChange?: (active: boolean) => void;
 }
 
 export function FileViewer({
@@ -628,6 +630,8 @@ export function FileViewer({
   onFileSaved,
   manualEditPortalId,
   onManualEditModeChange,
+  commentPortalId,
+  onCommentModeChange,
 }: Props) {
   const rendererMatch = artifactRendererRegistry.resolve({
     file,
@@ -667,6 +671,8 @@ export function FileViewer({
         onFileSaved={onFileSaved}
         manualEditPortalId={manualEditPortalId}
         onManualEditModeChange={onManualEditModeChange}
+        commentPortalId={commentPortalId}
+        onCommentModeChange={onCommentModeChange}
       />
     );
   }
@@ -1895,6 +1901,7 @@ export function CommentSidePanel({
   onSendSelected,
   sending,
   t,
+  composer,
 }: {
   comments: PreviewComment[];
   selectedIds: Set<string>;
@@ -1907,6 +1914,7 @@ export function CommentSidePanel({
   onSendSelected: () => void | Promise<void>;
   sending: boolean;
   t: TranslateFn;
+  composer?: ReactNode;
 }) {
   const sorted = [...comments].sort((a, b) => b.createdAt - a.createdAt);
   const visibleSelectedIds = new Set(comments.filter((comment) => selectedIds.has(comment.id)).map((comment) => comment.id));
@@ -1990,6 +1998,7 @@ export function CommentSidePanel({
           );
         })}
       </div>
+      {composer ? <div className="comment-side-composer">{composer}</div> : null}
       {selectedCount > 0 ? (
         <div className="comment-side-selectbar" data-testid="comment-side-selectbar">
           <span className="comment-side-selectcount">{t('chat.comments.nSelected', { n: selectedCount })}</span>
@@ -3452,6 +3461,8 @@ function HtmlViewer({
   onFileSaved,
   manualEditPortalId,
   onManualEditModeChange,
+  commentPortalId,
+  onCommentModeChange,
 }: {
   projectId: string;
   projectKind: TrackingProjectKind;
@@ -3468,6 +3479,8 @@ function HtmlViewer({
   onFileSaved?: () => Promise<void> | void;
   manualEditPortalId?: string;
   onManualEditModeChange?: (active: boolean) => void;
+  commentPortalId?: string;
+  onCommentModeChange?: (active: boolean) => void;
 }) {
   const t = useT();
   const analytics = useAnalytics();
@@ -3644,6 +3657,7 @@ function HtmlViewer({
   const [manualEditFrozenSource, setManualEditFrozenSource] = useState<string | null>(null);
   const [manualEditViewportWidth, setManualEditViewportWidth] = useState<number | null>(null);
   const [manualEditPortalHost, setManualEditPortalHost] = useState<HTMLElement | null>(null);
+  const [commentPortalHost, setCommentPortalHost] = useState<HTMLElement | null>(null);
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const urlPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -3699,6 +3713,12 @@ function HtmlViewer({
     onManualEditModeChange?.(false);
   }, [onManualEditModeChange]);
   useEffect(() => {
+    onCommentModeChange?.(boardMode);
+  }, [boardMode, onCommentModeChange]);
+  useEffect(() => () => {
+    onCommentModeChange?.(false);
+  }, [onCommentModeChange]);
+  useEffect(() => {
     if (!manualEditMode || !manualEditPortalId) {
       setManualEditPortalHost(null);
       return;
@@ -3718,6 +3738,26 @@ function HtmlViewer({
       setManualEditPortalHost(null);
     };
   }, [manualEditMode, manualEditPortalId]);
+  useEffect(() => {
+    if (!boardMode || !commentPortalId) {
+      setCommentPortalHost(null);
+      return;
+    }
+    let cancelled = false;
+    let raf = 0;
+    const findHost = () => {
+      if (cancelled) return;
+      const host = document.getElementById(commentPortalId);
+      setCommentPortalHost(host);
+      if (!host) raf = window.requestAnimationFrame(findHost);
+    };
+    findHost();
+    return () => {
+      cancelled = true;
+      if (raf) window.cancelAnimationFrame(raf);
+      setCommentPortalHost(null);
+    };
+  }, [boardMode, commentPortalId]);
   const capturePreviewScrollPosition = useCallback(() => {
     const host = previewBodyRef.current;
     let frameLeft = 0;
@@ -5735,6 +5775,113 @@ function HtmlViewer({
       }}
     />
   ) : null;
+  const commentComposer = boardMode && activeCommentTarget ? (
+    <BoardComposerPopover
+      target={activeCommentTarget}
+      existing={visibleSideComments.find((comment) => comment.elementId === activeCommentTarget.elementId) ?? null}
+      draft={commentDraft}
+      notes={queuedBoardNotes}
+      onDraft={setCommentDraft}
+      onAddDraft={queueCurrentDraft}
+      onRemoveQueuedNote={(index) =>
+        setQueuedBoardNotes((current) => current.filter((_, currentIndex) => currentIndex !== index))
+      }
+      onClose={clearBoardComposer}
+      onSaveComment={savePersistentComment}
+      onSendBatch={sendBoardBatch}
+      onRemove={async (commentId) => {
+        if (!onRemovePreviewComment) return;
+        await onRemovePreviewComment(commentId);
+        clearBoardComposer();
+      }}
+      onRemoveMember={(elementId) => {
+        setActiveCommentTarget((current) => {
+          const { next, shouldClose } = applyPodMemberRemoval(current, elementId);
+          if (shouldClose) clearBoardComposer();
+          return next;
+        });
+        setHoveredPodMemberId((current) => (current === elementId ? null : current));
+      }}
+      onHoverMember={setHoveredPodMemberId}
+      sending={sendingBoardBatch || streaming}
+      t={t}
+      scale={overlayPreviewScale}
+      docked={Boolean(commentPortalHost)}
+    />
+  ) : null;
+  const emptyCommentComposer = boardMode && commentPortalHost && !activeCommentTarget ? (
+    <div className="comment-popover comment-popover-docked comment-popover-placeholder">
+      <textarea
+        disabled
+        placeholder={t('chat.comments.placeholder')}
+        aria-label={t('chat.comments.placeholder')}
+      />
+    </div>
+  ) : null;
+  const commentSidePanel = boardMode ? (
+    <CommentSidePanel
+      comments={visibleSideComments}
+      selectedIds={selectedSideCommentIds}
+      collapsed={commentPortalHost ? false : commentSidePanelCollapsed}
+      onCollapsedChange={setCommentSidePanelCollapsed}
+      onClose={() => {
+        setBoardMode(false);
+        setCommentSidePanelCollapsed(false);
+        clearBoardComposer();
+      }}
+      onToggleSelect={(commentId) => {
+        setSelectedSideCommentIds((current) => {
+          const next = new Set(current);
+          if (next.has(commentId)) next.delete(commentId);
+          else next.add(commentId);
+          return next;
+        });
+      }}
+      onClearSelection={() => setSelectedSideCommentIds(new Set())}
+      onReply={(comment) => {
+        // Reply == edit on a flat-thread model: prefill the
+        // popover with the existing note so the user sees and
+        // mutates the current text. Save runs through the
+        // same upsert path; matching project/conv/file/element
+        // updates note in place rather than creating a new row.
+        const snapshot = liveSnapshotForComment(comment, liveCommentTargets) ?? {
+          filePath: comment.filePath,
+          elementId: comment.elementId,
+          selector: comment.selector,
+          label: comment.label,
+          text: comment.text,
+          position: comment.position,
+          htmlHint: comment.htmlHint,
+          style: comment.style,
+          selectionKind: comment.selectionKind ?? 'element',
+          memberCount: comment.memberCount,
+          podMembers: comment.podMembers,
+        };
+        setActiveCommentTarget(snapshot);
+        setHoveredCommentTarget(snapshot);
+        setActivePreviewCommentId(comment.id);
+        setCommentDraft(comment.note);
+        setQueuedBoardNotes([]);
+      }}
+      onSendSelected={async () => {
+        if (!onSendBoardCommentAttachments) return;
+        const selected = visibleSideComments.filter(
+          (comment) => selectedSideCommentIds.has(comment.id),
+        );
+        if (selected.length === 0) return;
+        setSendingBoardBatch(true);
+        try {
+          await onSendBoardCommentAttachments(commentsToAttachments(selected));
+          setSelectedSideCommentIds(new Set());
+        } finally {
+          setSendingBoardBatch(false);
+        }
+      }}
+      sending={sendingBoardBatch || streaming}
+      t={t}
+      composer={commentPortalHost ? (commentComposer ?? emptyCommentComposer) : null}
+    />
+  ) : null;
 
   return (
     <div className="viewer html-viewer">
@@ -6289,8 +6436,6 @@ function HtmlViewer({
               ? `manual-edit-workspace${manualEditPortalId ? ' manual-edit-workspace-portal' : ''} preview-viewport preview-viewport-${previewViewport}`
               : [
                   'comment-preview-layer',
-                  boardMode ? 'comment-preview-layer-comments-open' : '',
-                  boardMode && commentSidePanelCollapsed ? 'comment-preview-layer-comments-collapsed' : '',
                   `preview-viewport preview-viewport-${previewViewport}`,
                 ].filter(Boolean).join(' ')}
             style={previewViewportStyle(previewViewport, previewScale, previewBodySize)}
@@ -6409,105 +6554,13 @@ function HtmlViewer({
                 />
               </div>
             ) : null}
-            {boardMode && activeCommentTarget ? (
-              <BoardComposerPopover
-                target={activeCommentTarget}
-                existing={visibleSideComments.find((comment) => comment.elementId === activeCommentTarget.elementId) ?? null}
-                draft={commentDraft}
-                notes={queuedBoardNotes}
-                onDraft={setCommentDraft}
-                onAddDraft={queueCurrentDraft}
-                onRemoveQueuedNote={(index) =>
-                  setQueuedBoardNotes((current) => current.filter((_, currentIndex) => currentIndex !== index))
-                }
-                onClose={clearBoardComposer}
-                onSaveComment={savePersistentComment}
-                onSendBatch={sendBoardBatch}
-                onRemove={async (commentId) => {
-                  if (!onRemovePreviewComment) return;
-                  await onRemovePreviewComment(commentId);
-                  clearBoardComposer();
-                }}
-                onRemoveMember={(elementId) => {
-                  setActiveCommentTarget((current) => {
-                    const { next, shouldClose } = applyPodMemberRemoval(current, elementId);
-                    if (shouldClose) clearBoardComposer();
-                    return next;
-                  });
-                  setHoveredPodMemberId((current) => (current === elementId ? null : current));
-                }}
-                onHoverMember={setHoveredPodMemberId}
-                sending={sendingBoardBatch || streaming}
-                t={t}
-                scale={overlayPreviewScale}
-              />
-            ) : null}
+            {!commentPortalHost ? commentComposer : null}
             {boardMode && !activeCommentTarget && hoveredCommentTarget ? (
               <AnnotationHoverPopover target={hoveredCommentTarget} scale={overlayPreviewScale} />
             ) : null}
-            {boardMode ? (
-              <CommentSidePanel
-                comments={visibleSideComments}
-                selectedIds={selectedSideCommentIds}
-                collapsed={commentSidePanelCollapsed}
-                onCollapsedChange={setCommentSidePanelCollapsed}
-                onClose={() => {
-                  setBoardMode(false);
-                  setCommentSidePanelCollapsed(false);
-                  clearBoardComposer();
-                }}
-                onToggleSelect={(commentId) => {
-                  setSelectedSideCommentIds((current) => {
-                    const next = new Set(current);
-                    if (next.has(commentId)) next.delete(commentId);
-                    else next.add(commentId);
-                    return next;
-                  });
-                }}
-                onClearSelection={() => setSelectedSideCommentIds(new Set())}
-                onReply={(comment) => {
-                  // Reply == edit on a flat-thread model: prefill the
-                  // popover with the existing note so the user sees and
-                  // mutates the current text. Save runs through the
-                  // same upsert path; matching project/conv/file/element
-                  // updates note in place rather than creating a new row.
-                  const snapshot = liveSnapshotForComment(comment, liveCommentTargets) ?? {
-                    filePath: comment.filePath,
-                    elementId: comment.elementId,
-                    selector: comment.selector,
-                    label: comment.label,
-                    text: comment.text,
-                    position: comment.position,
-                    htmlHint: comment.htmlHint,
-                    style: comment.style,
-                    selectionKind: comment.selectionKind ?? 'element',
-                    memberCount: comment.memberCount,
-                    podMembers: comment.podMembers,
-                  };
-                  setActiveCommentTarget(snapshot);
-                  setHoveredCommentTarget(snapshot);
-                  setActivePreviewCommentId(comment.id);
-                  setCommentDraft(comment.note);
-                  setQueuedBoardNotes([]);
-                }}
-                onSendSelected={async () => {
-                  if (!onSendBoardCommentAttachments) return;
-                  const selected = visibleSideComments.filter(
-                    (comment) => selectedSideCommentIds.has(comment.id),
-                  );
-                  if (selected.length === 0) return;
-                  setSendingBoardBatch(true);
-                  try {
-                    await onSendBoardCommentAttachments(commentsToAttachments(selected));
-                    setSelectedSideCommentIds(new Set());
-                  } finally {
-                    setSendingBoardBatch(false);
-                  }
-                }}
-                sending={sendingBoardBatch || streaming}
-                t={t}
-              />
-            ) : null}
+            {commentPortalHost && commentSidePanel
+              ? createPortal(commentSidePanel, commentPortalHost)
+              : commentSidePanel}
             {inspectMode && activeInspectTarget ? (
               <InspectPanel
                 target={activeInspectTarget}
