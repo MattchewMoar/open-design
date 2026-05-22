@@ -98,6 +98,10 @@ async function withFakeCursorAgent<T>(script: string, run: () => Promise<T>): Pr
   return withFakeAgent('cursor-agent', script, run);
 }
 
+async function withFakeDeepSeek<T>(script: string, run: () => Promise<T>): Promise<T> {
+  return withFakeAgent('deepseek', script, run);
+}
+
 async function waitForFile(file: string, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -1145,7 +1149,10 @@ describe('POST /api/test/connection provider mode', () => {
 describe('POST /api/test/connection agent mode', () => {
   it('reports success for a fake Codex agent response', async () => {
     await withFakeCodex(
-      `console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } }));`,
+      `
+console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } }));
+setImmediate(() => process.exit(0));
+`,
       async () => {
         const res = await realFetch(`${baseUrl}/api/test/connection`, {
           method: 'POST',
@@ -1173,9 +1180,11 @@ describe('POST /api/test/connection agent mode', () => {
 const fs = require('node:fs');
 fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
   CODEX_HOME: process.env.CODEX_HOME || null,
+  CODEX_API_KEY: process.env.CODEX_API_KEY || null,
   SHOULD_NOT_PASS: process.env.OD_CONNECTION_TEST_SHOULD_NOT_PASS || null,
 }));
 console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ok' } }));
+setImmediate(() => process.exit(0));
 `,
         async () => {
           const res = await realFetch(`${baseUrl}/api/test/connection`, {
@@ -1187,6 +1196,7 @@ console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_messag
               agentCliEnv: {
                 codex: {
                   CODEX_HOME: codexHome,
+                  CODEX_API_KEY: 'codex-key',
                   OD_CONNECTION_TEST_SHOULD_NOT_PASS: 'leaked',
                 },
                 claude: {
@@ -1204,6 +1214,7 @@ console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_messag
           await expect(fsp.readFile(envFile, 'utf8')).resolves.toBe(
             JSON.stringify({
               CODEX_HOME: codexHome,
+              CODEX_API_KEY: 'codex-key',
               SHOULD_NOT_PASS: null,
             }),
           );
@@ -1647,6 +1658,69 @@ setTimeout(() => process.exit(0), 50);
     );
   });
 
+  it('launches OpenCode connection tests with 1.3-compatible JSON stdin args', async () => {
+    const markerDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'od-opencode-argv-'));
+    const argvFile = path.join(markerDir, 'argv.json');
+    const stdinFile = path.join(markerDir, 'stdin.txt');
+    try {
+      await withFakeOpenCode(
+        `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === 'models') {
+  console.log('github-copilot/gpt-4o');
+  process.exit(0);
+}
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(args));
+let stdin = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => { stdin += chunk; });
+process.stdin.on('end', () => {
+  fs.writeFileSync(${JSON.stringify(stdinFile)}, stdin);
+  if (args.includes('--dangerously-skip-permissions') || args.includes('--model')) {
+    console.error('incompatible opencode args');
+    process.exit(1);
+    return;
+  }
+  console.log(JSON.stringify({ type: 'text', part: { text: 'ok' } }));
+});
+`,
+        async () => {
+          const res = await realFetch(`${baseUrl}/api/test/connection`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'agent',
+              agentId: 'opencode',
+              model: 'github-copilot/gpt-4o',
+            }),
+          });
+          expect(res.status).toBe(200);
+          await expect(res.json()).resolves.toMatchObject({
+            ok: true,
+            kind: 'success',
+            agentName: 'OpenCode',
+            model: 'github-copilot/gpt-4o',
+            sample: 'ok',
+          });
+
+          await expect(fsp.readFile(argvFile, 'utf8')).resolves.toBe(
+            JSON.stringify([
+              'run',
+              '--format',
+              'json',
+              '-m',
+              'github-copilot/gpt-4o',
+            ]),
+          );
+          await expect(fsp.readFile(stdinFile, 'utf8')).resolves.toBe('Reply with only: ok');
+        },
+      );
+    } finally {
+      await fsp.rm(markerDir, { recursive: true, force: true });
+    }
+  });
+
   it('reports Cursor Agent status auth failures before running the smoke prompt', async () => {
     await withFakeCursorAgent(
       `
@@ -1746,6 +1820,31 @@ process.exit(1);
           agentName: 'Cursor Agent',
           detail: expect.stringContaining('cursor-agent status'),
         });
+      },
+    );
+  });
+
+  it('classifies DeepSeek TUI config guidance from stderr as missing auth', async () => {
+    await withFakeDeepSeek(
+      `
+const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  console.log('deepseek 0.3.0-test');
+  process.exit(0);
+}
+console.error('KEY=<your-key> deepseek --api-key <your-key>');
+console.error('api_key = "<your-key>" in ~/.deepseek/config.toml');
+process.exit(0);
+`,
+      async () => {
+        const result = await testAgentConnection({ agentId: 'deepseek' });
+        expect(result).toMatchObject({
+          ok: false,
+          kind: 'agent_auth_required',
+          agentName: 'DeepSeek TUI',
+          detail: expect.stringContaining('~/.deepseek/config.toml'),
+        });
+        expect(result.detail).toContain('DEEPSEEK_API_KEY');
       },
     );
   });

@@ -5,6 +5,7 @@ const STORAGE_KEY = 'open-design:config';
 const LOCALE_KEY = 'open-design:locale';
 const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
 const SETTINGS_MENU_LABEL = /^Settings$|^设置$|^設定$/i;
+const LOCAL_CLI_LABEL = /Local CLI|本机 CLI|本地 CLI/i;
 
 test.describe.configure({ timeout: 30_000 });
 
@@ -156,15 +157,19 @@ async function openLocalCliSettings(
   await gotoEntryHome(page);
   await page.getByRole('button', { name: OPEN_SETTINGS_LABEL }).click();
   const menu = page.getByRole('menu');
-  await expect(menu).toBeVisible();
-  await menu.getByRole('button', { name: SETTINGS_MENU_LABEL }).click();
+  if (await menu.isVisible().catch(() => false)) {
+    await menu.getByRole('button', { name: SETTINGS_MENU_LABEL }).click();
+  }
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('tab', { name: /Local CLI|本机 CLI/i }).click();
+  await dialog.getByRole('tab', { name: LOCAL_CLI_LABEL }).click();
   const codexCard = dialog.getByRole('button', { name: /Codex CLI/i });
   await expect(codexCard).toBeVisible();
   await codexCard.click();
+  await dialog.getByTestId('settings-cli-env').evaluate((details) => {
+    if (details instanceof HTMLDetailsElement) details.open = true;
+  });
   await expect(
     dialog.getByLabel(/Codex executable path|Codex 可执行文件路径/i),
   ).toBeVisible();
