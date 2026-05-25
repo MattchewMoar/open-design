@@ -5,6 +5,7 @@ import * as spaShellRoute from '../../app/[[...slug]]/page';
 describe('SPA shell export route', () => {
   it('stays compatible with static export builds', () => {
     expect(nextConfig.output).toBe('export');
+    expect(nextConfig.distDir).toBeUndefined();
     expect('dynamicParams' in spaShellRoute).toBe(false);
     expect(spaShellRoute.generateStaticParams()).toEqual([{ slug: [] }]);
   });
