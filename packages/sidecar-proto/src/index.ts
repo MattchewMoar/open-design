@@ -25,8 +25,7 @@ export const SIDECAR_ENV = Object.freeze({
   BASE: "OD_SIDECAR_BASE",
   DAEMON_CLI_PATH: "OD_DAEMON_CLI_PATH",
   DAEMON_PORT: "OD_PORT",
-  IPC_BASE: "OD_SIDECAR_IPC_BASE",
-  IPC_PATH: "OD_SIDECAR_IPC_PATH",
+  ENDPOINT: "OD_SIDECAR_ENDPOINT",
   NAMESPACE: "OD_SIDECAR_NAMESPACE",
   SOURCE: "OD_SIDECAR_SOURCE",
   TOOLS_DEV_PARENT_PID: "OD_TOOLS_DEV_PARENT_PID",
@@ -37,34 +36,31 @@ export const SIDECAR_ENV = Object.freeze({
 
 export const SIDECAR_RUNTIME_ENV = Object.freeze({
   base: SIDECAR_ENV.BASE,
-  ipcBase: SIDECAR_ENV.IPC_BASE,
-  ipcPath: SIDECAR_ENV.IPC_PATH,
+  endpoint: SIDECAR_ENV.ENDPOINT,
   namespace: SIDECAR_ENV.NAMESPACE,
   source: SIDECAR_ENV.SOURCE,
 } as const);
 
 export const SIDECAR_STAMP_FLAGS = Object.freeze({
   app: "--od-stamp-app",
-  ipc: "--od-stamp-ipc",
+  endpoint: "--od-stamp-endpoint",
   mode: "--od-stamp-mode",
   namespace: "--od-stamp-namespace",
   source: "--od-stamp-source",
 } as const);
 
 export const STAMP_APP_FLAG = SIDECAR_STAMP_FLAGS.app;
-export const STAMP_IPC_FLAG = SIDECAR_STAMP_FLAGS.ipc;
+export const STAMP_ENDPOINT_FLAG = SIDECAR_STAMP_FLAGS.endpoint;
 export const STAMP_MODE_FLAG = SIDECAR_STAMP_FLAGS.mode;
 export const STAMP_NAMESPACE_FLAG = SIDECAR_STAMP_FLAGS.namespace;
 export const STAMP_SOURCE_FLAG = SIDECAR_STAMP_FLAGS.source;
 
-export const SIDECAR_STAMP_FIELDS = ["app", "mode", "namespace", "ipc", "source"] as const;
+export const SIDECAR_STAMP_FIELDS = ["app", "mode", "namespace", "endpoint", "source"] as const;
 
 export const SIDECAR_DEFAULTS = Object.freeze({
   host: "127.0.0.1",
-  ipcBase: "/tmp/open-design/ipc",
   namespace: "default",
   projectTmpDirName: ".tmp",
-  windowsPipePrefix: "open-design",
 } as const);
 
 export const SIDECAR_MESSAGES = Object.freeze({
@@ -146,7 +142,7 @@ export type DaemonStatusSnapshot = {
   /**
    * PR #974 round 6 (mrcfps): true when the daemon's
    * `/api/import/folder` route refuses tokenless requests. Surfaced
-   * over IPC so `tools-dev start desktop` can detect a daemon that
+   * over the sidecar control endpoint so `tools-dev start desktop` can detect a daemon that
    * was spawned without `OD_REQUIRE_DESKTOP_AUTH=1` (the split-start
    * dev flow `start daemon` -> `start desktop`) and restart it
    * before launching desktop main, instead of letting a renderer
@@ -335,7 +331,7 @@ export type DesktopClickMessage = { input: DesktopClickInput; type: typeof SIDEC
 export type DesktopExportPdfMessage = { input: DesktopExportPdfInput; type: typeof SIDECAR_MESSAGES.EXPORT_PDF };
 export type DesktopUpdateMessage = { input: DesktopUpdateInput; type: typeof SIDECAR_MESSAGES.UPDATE };
 
-// Sent by the desktop main process to the daemon over its sidecar IPC at
+// Sent by the desktop main process to the daemon over its sidecar control endpoint at
 // startup, before the BrowserWindow is created. The base64 string is a
 // freshly generated 32-byte secret that both processes will share for the
 // lifetime of the daemon. The daemon uses this secret to verify HMAC tokens
@@ -378,7 +374,7 @@ export type ShutdownResult = {
 
 export type SidecarStamp = {
   app: AppKey;
-  ipc: string;
+  endpoint: string;
   mode: SidecarMode;
   namespace: string;
   source: SidecarSource;
@@ -472,20 +468,40 @@ export function normalizeSidecarSource(source: unknown): SidecarSource {
   return source;
 }
 
-export function isWindowsNamedPipePath(value: unknown): boolean {
-  return typeof value === "string" && value.startsWith("\\\\.\\pipe\\");
+export function createSidecarEndpoint(port: number, host = SIDECAR_DEFAULTS.host): string {
+  if (host !== SIDECAR_DEFAULTS.host) {
+    throw new Error(`sidecar endpoint host must be ${SIDECAR_DEFAULTS.host}: ${host}`);
+  }
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`sidecar endpoint port must be between 1 and 65535: ${String(port)}`);
+  }
+  return `tcp://${host}:${port}`;
 }
 
-export function normalizeIpcPath(ipc: unknown): string {
-  if (typeof ipc !== "string") throw new Error("sidecar ipc path must be a string");
-  if (ipc.length === 0) throw new Error("sidecar ipc path must not be empty");
-  if (ipc.trim() !== ipc) throw new Error("sidecar ipc path must not contain leading or trailing whitespace");
-  if (ipc.includes("\0")) throw new Error("sidecar ipc path must not contain null bytes");
-  if (isWindowsNamedPipePath(ipc)) return ipc;
-  if (!ipc.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(ipc)) {
-    throw new Error(`sidecar ipc path must be absolute: ${ipc}`);
+export function normalizeSidecarEndpoint(endpoint: unknown): string {
+  if (typeof endpoint !== "string") throw new Error("sidecar endpoint must be a string");
+  if (endpoint.length === 0) throw new Error("sidecar endpoint must not be empty");
+  if (endpoint.trim() !== endpoint) throw new Error("sidecar endpoint must not contain leading or trailing whitespace");
+  if (endpoint.includes("\0")) throw new Error("sidecar endpoint must not contain null bytes");
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error(`sidecar endpoint must be tcp://${SIDECAR_DEFAULTS.host}:<port>: ${endpoint}`);
   }
-  return ipc;
+  if (
+    parsed.protocol !== "tcp:" ||
+    parsed.hostname !== SIDECAR_DEFAULTS.host ||
+    parsed.port.length === 0 ||
+    parsed.username.length > 0 ||
+    parsed.password.length > 0 ||
+    (parsed.pathname !== "" && parsed.pathname !== "/") ||
+    parsed.search.length > 0 ||
+    parsed.hash.length > 0
+  ) {
+    throw new Error(`sidecar endpoint must be tcp://${SIDECAR_DEFAULTS.host}:<port>: ${endpoint}`);
+  }
+  return createSidecarEndpoint(Number(parsed.port), parsed.hostname);
 }
 
 function assertKnownStampKeys(value: Record<string, unknown>, label: string): void {
@@ -497,7 +513,7 @@ export function normalizeSidecarStamp(input: unknown): SidecarStamp {
   assertKnownStampKeys(value, "sidecar stamp");
   return {
     app: normalizeAppKey(value.app),
-    ipc: normalizeIpcPath(value.ipc),
+    endpoint: normalizeSidecarEndpoint(value.endpoint),
     mode: normalizeSidecarMode(value.mode),
     namespace: normalizeNamespace(value.namespace),
     source: normalizeSidecarSource(value.source),
@@ -509,7 +525,7 @@ export function normalizeSidecarStampCriteria(input: unknown = {}): SidecarStamp
   assertKnownStampKeys(value, "sidecar stamp criteria");
   return {
     ...(value.app == null ? {} : { app: normalizeAppKey(value.app) }),
-    ...(value.ipc == null ? {} : { ipc: normalizeIpcPath(value.ipc) }),
+    ...(value.endpoint == null ? {} : { endpoint: normalizeSidecarEndpoint(value.endpoint) }),
     ...(value.mode == null ? {} : { mode: normalizeSidecarMode(value.mode) }),
     ...(value.namespace == null ? {} : { namespace: normalizeNamespace(value.namespace) }),
     ...(value.source == null ? {} : { source: normalizeSidecarSource(value.source) }),

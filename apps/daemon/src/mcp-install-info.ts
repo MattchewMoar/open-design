@@ -6,7 +6,7 @@
 // silently misses the sidecar transport endpoint.
 //
 // Side effects (the fs.existsSync probes, process.execPath, the
-// ELECTRON_RUN_AS_NODE env read, OD_DATA_DIR resolution, sidecar IPC
+// ELECTRON_RUN_AS_NODE env read, OD_DATA_DIR resolution, sidecar control
 // detection) all stay in the caller. This module is intentionally pure
 // and free of @open-design/sidecar-proto so it can be unit-tested
 // without booting the daemon.
@@ -21,8 +21,8 @@ export interface BuildMcpInstallPayloadInputs {
   dataDir: string;
   electronAsNode: boolean;
   /** True when the daemon was bootstrapped as a sidecar and the
-   *  spawned `od mcp` should discover the live URL via the IPC
-   *  status socket instead of a baked --daemon-url. */
+   *  spawned `od mcp` should discover the live URL via the sidecar
+   *  control endpoint instead of a baked --daemon-url. */
   isSidecarMode: boolean;
   /** Already-filtered sidecar transport env entries the
    *  caller wants propagated into the snippet. The caller decides
@@ -69,9 +69,9 @@ export function buildMcpInstallPayload(
     env.ELECTRON_RUN_AS_NODE = '1';
   }
   // Sidecar mode: omit --daemon-url so the spawned `od mcp` discovers
-  // the live URL via the IPC status socket on every spawn, surviving
+  // the live URL via the control endpoint on every spawn, surviving
   // ephemeral-port restarts. Direct `od --port X` launches have no
-  // socket and need the URL baked.
+  // sidecar endpoint and need the URL baked.
   const args = inputs.isSidecarMode
     ? [inputs.cliPath, 'mcp']
     : [

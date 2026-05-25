@@ -26,7 +26,7 @@ For the current coverage posture, recent hardening work, grouped-run status, and
 - `tests/` should pin reusable local hotspots, such as `tools-dev/inspect.test.ts`, provider mocks, report lifecycle, artifact file shape, or namespace cleanup.
 - High-confidence infrastructure checks may be added to `tests/` before a full core spec exists, but most tests should be extracted only after a spec proves the local hotspot matters.
 - Treat `tests/` as maintainable support material, not permanent coverage inventory. Merge, split, shrink, or delete tests as product capabilities evolve.
-- Keep new non-UI e2e smoke chains pure inspect by default. Do not use Playwright for these chains; use daemon/web APIs, sidecar IPC, tools-dev/tools-pack inspect, logs, reports, and screenshots when available.
+- Keep new non-UI e2e smoke chains pure inspect by default. Do not use Playwright for these chains; use daemon/web APIs, sidecar control endpoints, tools-dev/tools-pack inspect, logs, reports, and screenshots when available.
 - External service dependencies must use temporary server-level mocks. Do not rely on real API keys, real provider accounts, or UI-level route patching for core e2e smoke.
 - Every atomic suite must run in an isolated namespace. Successful suites should keep only curated reports and high-value artifacts, then clean process/runtime scratch. Failed suites should preserve runtime scratch, logs, mock requests, screenshots, and report pointers for diagnosis.
 

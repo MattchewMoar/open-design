@@ -10,10 +10,11 @@ import {
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
 import {
-  createJsonIpcServer,
-  requestJsonIpc,
-  resolveAppIpcPath,
-  type JsonIpcServerHandle,
+  createJsonControlServer,
+  readAppControlEndpoint,
+  requestJsonControl,
+  resolveNamespaceRoot,
+  type JsonControlServerHandle,
   type SidecarRuntimeContext,
 } from "@open-design/sidecar";
 
@@ -23,11 +24,11 @@ import { isDesktopAuthGateActive, setDesktopAuthSecret } from "../desktop-auth.j
 /**
  * PR #974 round 6 (mrcfps): pure wrapper that overlays the live
  * `desktopAuthGateActive` flag on a cached startup snapshot. The
- * STATUS IPC handler and the public `status()` method both call this
+ * STATUS handler and the public `status()` method both call this
  * so the gate flag is always read fresh (it flips after
  * REGISTER_DESKTOP_AUTH and stays sticky), even though the rest of
  * the snapshot is captured once at boot. Exported so the daemon
- * test suite can pin the wiring without booting a real IPC server.
+ * test suite can pin the wiring without booting a real control server.
  */
 export function withCurrentDesktopAuthGate(snapshot: DaemonStatusSnapshot): DaemonStatusSnapshot {
   return { ...snapshot, desktopAuthGateActive: isDesktopAuthGateActive() };
@@ -79,15 +80,21 @@ function attachParentMonitor(stop: () => Promise<void>): void {
 }
 
 export async function startDaemonSidecar(runtime: SidecarRuntimeContext<SidecarStamp>): Promise<DaemonSidecarHandle> {
+  const namespaceRoot = resolveNamespaceRoot({
+    base: runtime.base,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespace: runtime.namespace,
+  });
   const serverHandle: StartedDaemonRuntime = await startDaemonRuntime({
     desktopPdfExporter: async (input: DesktopExportPdfInput): Promise<DesktopExportPdfResult> => {
-      const desktopIpc = resolveAppIpcPath({
+      const desktopEndpoint = await readAppControlEndpoint({
         app: APP_KEYS.DESKTOP,
         contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-        namespace: runtime.namespace,
+        namespaceRoot,
       });
-      return await requestJsonIpc<DesktopExportPdfResult>(
-        desktopIpc,
+      if (desktopEndpoint == null) throw new Error("desktop control endpoint is not available");
+      return await requestJsonControl<DesktopExportPdfResult>(
+        desktopEndpoint,
         { input, type: SIDECAR_MESSAGES.EXPORT_PDF },
         { timeoutMs: 600_000 },
       );
@@ -97,7 +104,7 @@ export async function startDaemonSidecar(runtime: SidecarRuntimeContext<SidecarS
   });
 
   // PR #974 round 6 (mrcfps): tools-dev's split-start hardening reads
-  // `desktopAuthGateActive` from the STATUS IPC. The flag is dynamic
+  // `desktopAuthGateActive` from the STATUS response. The flag is dynamic
   // (flips to true on REGISTER_DESKTOP_AUTH) so the STATUS handler and
   // the public `status()` method below recompute it from
   // `isDesktopAuthGateActive()` per request — the value cached here is
@@ -110,7 +117,7 @@ export async function startDaemonSidecar(runtime: SidecarRuntimeContext<SidecarS
     updatedAt: new Date().toISOString(),
     url: serverHandle.url,
   };
-  let ipcServer: JsonIpcServerHandle | null = null;
+  let controlServer: JsonControlServerHandle | null = null;
   let stopped = false;
   let resolveStopped!: () => void;
   const stoppedPromise = new Promise<void>((resolveStop) => {
@@ -122,15 +129,15 @@ export async function startDaemonSidecar(runtime: SidecarRuntimeContext<SidecarS
     stopped = true;
     state.state = "stopped";
     state.updatedAt = new Date().toISOString();
-    await ipcServer?.close().catch(() => undefined);
+    await controlServer?.close().catch(() => undefined);
     await serverHandle.stop().catch(() => undefined);
     resolveStopped();
   }
 
   attachParentMonitor(stop);
 
-  ipcServer = await createJsonIpcServer({
-    socketPath: runtime.ipc,
+  controlServer = await createJsonControlServer({
+    endpoint: runtime.endpoint,
     handler: async (message: unknown) => {
       const request = normalizeDaemonSidecarMessage(message);
       switch (request.type) {

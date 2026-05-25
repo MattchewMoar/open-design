@@ -72,7 +72,7 @@ OD는 네 개의 오픈소스 프로젝트의 어깨 위에 서 있습니다:
 | **임포트** | [Claude Design][cd] 익스포트 ZIP을 환영 다이얼로그에 드롭하면 `POST /api/import/claude-design`이 진짜 프로젝트로 풀어주고, 로컬 에이전트는 Anthropic이 멈춘 지점에서 그대로 편집을 이어받습니다. |
 | **영속성** | `.od/app.sqlite`의 SQLite: projects · conversations · messages · tabs · 사용자 templates. 내일 다시 열면 todo 카드와 열린 파일 모두 어제 그 자리. |
 | **라이프사이클** | 단일 입구 `pnpm tools-dev`(start / stop / run / status / logs / inspect / check) — 타입화된 sidecar 스탬프로 daemon + web(+ desktop) 구동 |
-| **데스크탑** | 선택적 Electron 셸: 샌드박스 렌더러 + sidecar IPC(STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN) — 같은 채널이 `tools-dev inspect desktop screenshot`을 구동해 E2E를 돌립니다 |
+| **데스크탑** | 선택적 Electron 셸: 샌드박스 렌더러 + sidecar control endpoint(STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN) — 같은 채널이 `tools-dev inspect desktop screenshot`을 구동해 E2E를 돌립니다 |
 | **배포 대상** | 로컬 (`pnpm tools-dev`) · Vercel 웹 레이어 · macOS (Apple Silicon)와 Windows (x64)용 패키지된 Electron 데스크톱 앱 — [open-design.ai](https://open-design.ai/) 또는 [최신 릴리스](https://github.com/nexu-io/open-design/releases)에서 다운로드 |
 | **라이선스** | Apache-2.0 |
 
@@ -283,7 +283,7 @@ DISCOVERY 지시문    (turn-1 폼, turn-2 브랜드 분기, TodoWrite, 5차원 
    │  /api/upload         /api/projects/:id/files…
    │  /artifacts (정적)   /frames (정적)
    │
-   │  선택적 sidecar IPC: /tmp/open-design/ipc/<ns>/<app>.sock
+   │  선택적 sidecar control endpoint: tcp://127.0.0.1:<port>
    │  (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN)
    └─────────┬───────────────────────┘
              │ spawn(cli, [...], { cwd: .od/projects/<id> })
@@ -305,7 +305,7 @@ DISCOVERY 지시문    (turn-1 폼, turn-2 브랜드 분기, TodoWrite, 5차원 
 | 미리보기 | `srcdoc`를 통한 샌드박스 iframe + 스킬별 `<artifact>` 파서([`apps/web/src/artifacts/parser.ts`](apps/web/src/artifacts/parser.ts)) |
 | 내보내기 | HTML(인라인 에셋) · PDF(브라우저 인쇄, deck-aware) · PPTX(에이전트 주도 + skill) · ZIP(archiver) · Markdown |
 | 라이프사이클 | `pnpm tools-dev start \| stop \| run \| status \| logs \| inspect \| check`; 포트는 `--daemon-port` / `--web-port`, 네임스페이스는 `--namespace` |
-| 데스크탑(선택) | Electron 셸 — sidecar IPC를 통해 web URL 발견, 포트 추측 없음; 같은 채널(`STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN`)이 `tools-dev inspect desktop …`로 E2E 구동 |
+| 데스크탑(선택) | Electron 셸 — sidecar control endpoint를 통해 web URL 발견, 포트 추측 없음; 같은 채널(`STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN`)이 `tools-dev inspect desktop …`로 E2E 구동 |
 
 ## 빠른 시작
 
@@ -589,7 +589,7 @@ OD는 코드에서 끝나지 않습니다. `<artifact>` HTML을 만드는 동일
 - **사용자 저장 templates.** 마음에 든 렌더가 있으면 `POST /api/templates`가 HTML + 메타데이터를 SQLite `templates` 테이블에 스냅샷으로 저장합니다. 다음 프로젝트의 picker에는 "내 템플릿" 행이 추가됩니다 — 기본 31개와 동일한 표면, 그러나 당신의 것.
 - **탭 영속성.** 모든 프로젝트는 `tabs` 테이블에 자기가 연 파일들과 활성 탭을 기억합니다. 내일 다시 열어도 워크스페이스는 어제 떠난 그 모습 그대로.
 - **Artifact lint API.** `POST /api/artifacts/lint`는 생성된 아티팩트에 대해 구조 검사(파괴된 `<artifact>` 프레임, 누락된 필수 사이드 파일, 오래된 팔레트 토큰)를 실행하고, 에이전트가 다음 턴에 다시 읽어들일 수 있는 findings를 반환합니다. 5차원 자기 검토는 이걸로 점수를 vibe가 아닌 실제 증거에 묶어둡니다.
-- **Sidecar 프로토콜 + 데스크탑 자동화.** Daemon, web, desktop 프로세스 모두 타입화된 5필드 스탬프(`app · mode · namespace · ipc · source`)를 들고 다니며, JSON-RPC IPC 채널을 `/tmp/open-design/ipc/<namespace>/<app>.sock`에 노출합니다. `tools-dev inspect desktop status \| eval \| screenshot`이 그 채널 위에서 동작하므로, 헤드리스 E2E가 진짜 Electron 셸을 상대로 자체 하네스 없이 동작합니다([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
+- **Sidecar 프로토콜 + 데스크탑 자동화.** Daemon, web, desktop 프로세스 모두 타입화된 5필드 스탬프(`app · mode · namespace · endpoint · source`)를 들고 다니며, JSON-RPC control endpoint을 `tcp://127.0.0.1:<port>`에 노출합니다. `tools-dev inspect desktop status \| eval \| screenshot`이 그 채널 위에서 동작하므로, 헤드리스 E2E가 진짜 Electron 셸을 상대로 자체 하네스 없이 동작합니다([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
 - **Windows 친화적 spawn.** 긴 합성 prompt에서 `CreateProcess`의 약 32 KB argv 한계를 넘을 만한 모든 어댑터(Codex, Gemini, OpenCode, Cursor Agent, Qwen, Qoder CLI, Pi)는 prompt를 stdin으로 보냅니다. Claude Code와 Copilot은 `-p`를 유지하고, 그것마저 넘치면 daemon은 임시 prompt 파일로 폴백합니다.
 - **네임스페이스별 런타임 데이터.** `OD_DATA_DIR`과 `--namespace`로 완전히 격리된 `.od/`-스타일 트리를 받습니다. Playwright, 베타 채널, 실제 작업 프로젝트가 SQLite 파일을 공유하는 일은 절대 없습니다.
 

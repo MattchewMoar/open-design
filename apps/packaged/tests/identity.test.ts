@@ -4,11 +4,9 @@ import { join } from "node:path";
 
 import {
   APP_KEYS,
-  OPEN_DESIGN_SIDECAR_CONTRACT,
   SIDECAR_MODES,
   SIDECAR_SOURCES,
 } from "@open-design/sidecar-proto";
-import { resolveAppIpcPath } from "@open-design/sidecar";
 import { describe, expect, it } from "vitest";
 
 import { writePackagedDesktopIdentity } from "../src/identity.js";
@@ -50,11 +48,7 @@ describe("packaged identity markers", () => {
     const paths = fakePaths(root);
     const stamp = {
       app: APP_KEYS.DESKTOP,
-      ipc: resolveAppIpcPath({
-        app: APP_KEYS.DESKTOP,
-        contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-        namespace: "default",
-      }),
+      endpoint: "tcp://127.0.0.1:17401",
       mode: SIDECAR_MODES.RUNTIME,
       namespace: "default",
       source: SIDECAR_SOURCES.PACKAGED,

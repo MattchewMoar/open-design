@@ -285,18 +285,18 @@ describe('waitForStatus child-exit fast-fail', () => {
   // But a daemon that throws LegacyMigrationError at startup (invalid
   // legacy dir, existing target payload, symlink, marker write failure)
   // exits before reporting status, and waiting the full 30 minutes makes
-  // the packaged app look hung. Racing the IPC polling against the
+  // the packaged app look hung. Racing status polling against the
   // child's exit event surfaces the failure promptly with a pointer to
   // the daemon log.
 
   it('rejects within milliseconds when the child exits before status is ready', async () => {
     const child = fakeChild();
-    const ipcPath = '/tmp/od-test-no-such-ipc-' + Date.now();
+    const endpoint = 'tcp://127.0.0.1:1';
     const logPath = '/tmp/od-test-daemon.log';
 
     const startedAt = Date.now();
     const promise = waitForStatus<{ url: string | null }>(
-      ipcPath,
+      endpoint,
       (status) => status.url != null,
       30 * 60 * 1000,
       { child, logPath },
@@ -322,7 +322,7 @@ describe('waitForStatus child-exit fast-fail', () => {
 
     // The whole point: don't sit through DAEMON_MIGRATION_STATUS_TIMEOUT_MS.
     // Allow generous slack for slow CI runners; the fix should bound this
-    // to roughly the IPC poll cadence (150ms) plus a couple of timer ticks.
+    // to roughly the status poll cadence (150ms) plus a couple of timer ticks.
     expect(elapsed).toBeLessThan(2_000);
   });
 
@@ -339,7 +339,7 @@ describe('waitForStatus child-exit fast-fail', () => {
     let captured: unknown;
     try {
       await waitForStatus<{ url: string | null }>(
-        '/tmp/od-test-no-such-ipc-pre-' + Date.now(),
+        'tcp://127.0.0.1:1',
         (status) => status.url != null,
         30 * 60 * 1000,
         { child, logPath: '/tmp/od-test-daemon.log' },

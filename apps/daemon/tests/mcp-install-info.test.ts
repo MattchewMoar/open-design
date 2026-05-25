@@ -68,11 +68,11 @@ function makeInstallInfoApp({ cliPath, port, env = {}, dataDir }: InstallInfoOpt
     // Mirror the production handler's sidecar detection so this test
     // exercises the same path; the helper below is the same one
     // server.ts calls.
-    const sidecarIpcPath = env[SIDECAR_ENV.IPC_PATH];
-    const isSidecarMode = sidecarIpcPath != null && sidecarIpcPath.length > 0;
+    const sidecarEndpoint = env[SIDECAR_ENV.ENDPOINT];
+    const isSidecarMode = sidecarEndpoint != null && sidecarEndpoint.length > 0;
     const sidecarEnv: Record<string, string> = {};
     if (isSidecarMode) {
-      sidecarEnv[SIDECAR_ENV.IPC_PATH] = sidecarIpcPath;
+      sidecarEnv[SIDECAR_ENV.ENDPOINT] = sidecarEndpoint;
     }
     const payload = buildMcpInstallPayload({
       cliPath,
@@ -175,7 +175,7 @@ describe('GET /api/mcp/install-info', () => {
     expect(res.status).toBe(200);
     const body = await readInstallInfo(res);
     expect(body.command).toBe(process.execPath);
-    // Direct `od` launches have no IPC socket; the snippet bakes the
+    // Direct `od` launches have no sidecar control endpoint; the snippet bakes the
     // URL so the spawned `od mcp` reaches the right port without any
     // discovery.
     expect(body.args).toEqual([cliPath, 'mcp', '--daemon-url', `http://127.0.0.1:${port}`]);
@@ -242,11 +242,11 @@ describe('GET /api/mcp/install-info', () => {
     expect(after - before).toBeLessThanOrEqual(1);
   });
 
-  it('sidecar launch omits --daemon-url and emits the concrete IPC path with OD_DATA_DIR', async () => {
+  it('sidecar launch omits --daemon-url and emits the concrete control endpoint with OD_DATA_DIR', async () => {
     const { port, server } = await startHarness(
       cliPath,
       {
-        [SIDECAR_ENV.IPC_PATH]: '/tmp/open-design/ipc/default/daemon.sock',
+        [SIDECAR_ENV.ENDPOINT]: 'tcp://127.0.0.1:17401',
       },
       dataDir,
     );
@@ -256,18 +256,18 @@ describe('GET /api/mcp/install-info', () => {
       expect(body.args).toEqual([cliPath, 'mcp']);
       expect(body.env).toEqual({
         OD_DATA_DIR: dataDir,
-        [SIDECAR_ENV.IPC_PATH]: '/tmp/open-design/ipc/default/daemon.sock',
+        [SIDECAR_ENV.ENDPOINT]: 'tcp://127.0.0.1:17401',
       });
     } finally {
       await new Promise<void>((done) => server?.close(() => done()));
     }
   });
 
-  it('sidecar non-default endpoint still propagates only the concrete IPC path', async () => {
+  it('sidecar non-default endpoint still propagates only the concrete endpoint', async () => {
     const { port, server } = await startHarness(
       cliPath,
       {
-        [SIDECAR_ENV.IPC_PATH]: '/tmp/open-design/ipc/foo/daemon.sock',
+        [SIDECAR_ENV.ENDPOINT]: 'tcp://127.0.0.1:17402',
       },
       dataDir,
     );
@@ -277,20 +277,19 @@ describe('GET /api/mcp/install-info', () => {
       expect(body.args).toEqual([cliPath, 'mcp']);
       expect(body.env).toEqual({
         OD_DATA_DIR: dataDir,
-        [SIDECAR_ENV.IPC_PATH]: '/tmp/open-design/ipc/foo/daemon.sock',
+        [SIDECAR_ENV.ENDPOINT]: 'tcp://127.0.0.1:17402',
       });
     } finally {
       await new Promise<void>((done) => server?.close(() => done()));
     }
   });
 
-  it('sidecar with custom IPC base does not propagate namespace or base hints', async () => {
+  it('sidecar mode does not propagate namespace hints', async () => {
     const { port, server } = await startHarness(
       cliPath,
       {
-        [SIDECAR_ENV.IPC_PATH]: '/var/run/open-design/foo/daemon.sock',
+        [SIDECAR_ENV.ENDPOINT]: 'tcp://127.0.0.1:17403',
         [SIDECAR_ENV.NAMESPACE]: 'foo',
-        [SIDECAR_ENV.IPC_BASE]: '/var/run/open-design',
       },
       dataDir,
     );
@@ -299,7 +298,7 @@ describe('GET /api/mcp/install-info', () => {
       const body = await readInstallInfo(res);
       expect(body.env).toEqual({
         OD_DATA_DIR: dataDir,
-        [SIDECAR_ENV.IPC_PATH]: '/var/run/open-design/foo/daemon.sock',
+        [SIDECAR_ENV.ENDPOINT]: 'tcp://127.0.0.1:17403',
       });
     } finally {
       await new Promise<void>((done) => server?.close(() => done()));

@@ -15,7 +15,7 @@
  *      a structured failure (NOT a silent ok), and `registerDesktopAuth`
  *      WAS called between attempts.
  *   3. Single-attempt happy path. First POST returns 200. Runtime did
- *      NOT invoke `registerDesktopAuth` (no unnecessary IPC). Renderer
+ *      NOT invoke `registerDesktopAuth` (no unnecessary control call). Renderer
  *      sees ok:true.
  *
  * The packaged workspace hosts these because `apps/desktop` itself has
@@ -125,11 +125,11 @@ describe("pickAndImportFolder lazy retry on DESKTOP_AUTH_PENDING", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("does NOT invoke registerDesktopAuth when the first POST returns 200 (no unnecessary IPC)", async () => {
+  it("does NOT invoke registerDesktopAuth when the first POST returns 200 (no unnecessary control call)", async () => {
     // The cheap-happy-path: registration succeeded at startup, daemon
     // already knows the secret, the very first POST under the trusted
     // picker flow returns 200. We must not double-register the secret
-    // on every import — that would burn a sidecar IPC roundtrip per
+    // on every import — that would burn a sidecar control roundtrip per
     // click for no benefit.
     const fetchImpl = vi
       .fn<typeof globalThis.fetch>()
@@ -174,7 +174,7 @@ describe("pickAndImportFolder lazy retry on DESKTOP_AUTH_PENDING", () => {
     // a 403 (token mismatch), 400 (folder not found), or 500 (daemon
     // crash) all return immediately to the renderer with the daemon's
     // structured error envelope. We must NOT re-register on every
-    // unrelated failure — that would mask real bugs and waste IPC.
+    // unrelated failure — that would mask real bugs and waste control calls.
     const fetchImpl = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(jsonResponse({ error: { code: "FORBIDDEN" } }, 403));

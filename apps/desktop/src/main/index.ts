@@ -23,12 +23,12 @@ import { dirname, join } from "node:path";
 
 import {
   bootstrapSidecarRuntime,
-  createJsonIpcServer,
-  requestJsonIpc,
-  resolveAppIpcPath,
+  createJsonControlServer,
+  readAppControlEndpoint,
+  requestJsonControl,
   resolveLogFilePath,
   resolveNamespaceRoot,
-  type JsonIpcServerHandle,
+  type JsonControlServerHandle,
   type SidecarRuntimeContext,
 } from "@open-design/sidecar";
 import { readProcessStamp } from "@open-design/platform";
@@ -151,12 +151,18 @@ function attachParentMonitor(stop: () => Promise<void>): void {
 
 function createWebDiscovery(runtime: SidecarRuntimeContext<SidecarStamp>): () => Promise<string | null> {
   return async () => {
-    const webIpc = resolveAppIpcPath({
-      app: APP_KEYS.WEB,
+    const namespaceRoot = resolveNamespaceRoot({
+      base: runtime.base,
       contract: OPEN_DESIGN_SIDECAR_CONTRACT,
       namespace: runtime.namespace,
     });
-    const web = await requestJsonIpc<WebStatusSnapshot>(webIpc, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 600 }).catch(() => null);
+    const webEndpoint = await readAppControlEndpoint({
+      app: APP_KEYS.WEB,
+      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+      namespaceRoot,
+    });
+    if (webEndpoint == null) return null;
+    const web = await requestJsonControl<WebStatusSnapshot>(webEndpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 600 }).catch(() => null);
     return web?.url ?? null;
   };
 }
@@ -258,13 +264,13 @@ const REGISTER_DESKTOP_AUTH_RETRY_DELAYS_MS = [120, 240, 480, 960, 1500];
 const REGISTER_DESKTOP_AUTH_TIMEOUT_MS = 800;
 
 /**
- * Sends a fresh, per-process secret to the daemon over its sidecar IPC
+ * Sends a fresh, per-process secret to the daemon over its sidecar control endpoint
  * before any BrowserWindow is created. The daemon stores the secret
  * and from this point on requires every `POST /api/import/folder`
  * request to carry an HMAC token signed with it (PR #974). On a clean
  * orchestrator startup the daemon is already up — but desktop and
  * daemon are sibling processes spawned by `tools-dev` / `tools-pack`,
- * so we retry the IPC call a few times before giving up. A failed
+ * so we retry the control call a few times before giving up. A failed
  * registration is *not* a hard error: the desktop runtime continues
  * and the import-folder bridge will simply refuse pickAndImport calls
  * (because no secret is in scope), instead of opening a renderer-
@@ -274,11 +280,17 @@ async function registerDesktopAuthWithDaemon(
   runtime: SidecarRuntimeContext<SidecarStamp>,
   secret: Buffer,
 ): Promise<boolean> {
-  const daemonIpc = resolveAppIpcPath({
-    app: APP_KEYS.DAEMON,
+  const namespaceRoot = resolveNamespaceRoot({
+    base: runtime.base,
     contract: OPEN_DESIGN_SIDECAR_CONTRACT,
     namespace: runtime.namespace,
   });
+  const daemonEndpoint = await readAppControlEndpoint({
+    app: APP_KEYS.DAEMON,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot,
+  });
+  if (daemonEndpoint == null) return false;
   const message = {
     input: { secret: secret.toString("base64") },
     type: SIDECAR_MESSAGES.REGISTER_DESKTOP_AUTH,
@@ -286,14 +298,14 @@ async function registerDesktopAuthWithDaemon(
   const delays = REGISTER_DESKTOP_AUTH_RETRY_DELAYS_MS;
   for (let attempt = 0; attempt <= delays.length; attempt += 1) {
     try {
-      const result = await requestJsonIpc<RegisterDesktopAuthResult>(
-        daemonIpc,
+      const result = await requestJsonControl<RegisterDesktopAuthResult>(
+        daemonEndpoint,
         message,
         { timeoutMs: REGISTER_DESKTOP_AUTH_TIMEOUT_MS },
       );
       if (result?.accepted === true) return true;
     } catch {
-      // Daemon not yet listening on the IPC socket, or message rejected.
+      // Daemon not yet listening on the control endpoint, or message rejected.
       // Fall through to the retry sleep below.
     }
     if (attempt >= delays.length) break;
@@ -379,7 +391,7 @@ export async function runDesktopMain(
   let disposeMenu: () => void = () => undefined;
   let updateScheduler: DesktopUpdaterScheduler | null = null;
   let removeDiagnosticsIpc: () => void = () => undefined;
-  let ipcServer: JsonIpcServerHandle | null = null;
+  let controlServer: JsonControlServerHandle | null = null;
   let shuttingDown = false;
 
   async function shutdown(): Promise<void> {
@@ -391,7 +403,7 @@ export async function runDesktopMain(
     updateScheduler?.stop("shutdown");
     disposeMenu();
     removeDiagnosticsIpc();
-    await ipcServer?.close().catch(() => undefined);
+    await controlServer?.close().catch(() => undefined);
     await desktop?.close().catch(() => undefined);
     app.quit();
   }
@@ -435,8 +447,8 @@ export async function runDesktopMain(
     void shutdown().finally(() => process.exit(0));
   });
 
-  ipcServer = await createJsonIpcServer({
-    socketPath: runtime.ipc,
+  controlServer = await createJsonControlServer({
+    endpoint: runtime.endpoint,
     handler: async (message: unknown) => {
       const request = normalizeDesktopSidecarMessage(message);
       const activeDesktop = desktop;

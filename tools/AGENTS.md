@@ -7,7 +7,7 @@ Follow the root `AGENTS.md` first. This file only records module-level boundarie
 - `tools/dev` provides `@open-design/tools-dev` and the `tools-dev` bin. It is the only currently active local development lifecycle control plane.
 - `pnpm tools-dev` manages daemon -> web -> desktop.
 - `pnpm tools-dev run web` runs foreground daemon + web for the Playwright webServer flow.
-- `pnpm tools-dev inspect desktop ...` inspects the desktop runtime through sidecar IPC.
+- `pnpm tools-dev inspect desktop ...` inspects the desktop runtime through the sidecar control endpoint.
 - `tools/pack` provides `@open-design/tools-pack` and the `tools-pack` bin. The active slice is packaged artifact build/install/start/stop/logs/uninstall/cleanup/list/reset plus beta release artifact preparation for mac and Windows lanes, plus a Linux AppImage lane with optional containerized builds.
 - `tools/serve` provides `@open-design/tools-serve` and the `tools-serve` bin. It owns local fixture services such as `tools-serve start updater`.
 

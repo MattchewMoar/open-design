@@ -6,9 +6,11 @@ import {
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
 import {
+  allocatePort,
   bootstrapSidecarRuntime,
+  createControlEndpoint,
   createSidecarLaunchEnv,
-  resolveAppIpcPath,
+  writeAppControlEndpoint,
 } from "@open-design/sidecar";
 import { applyOsLocaleSwitch } from "@open-design/desktop/main";
 import { readProcessStamp } from "@open-design/platform";
@@ -36,14 +38,17 @@ let packagedLogger: PackagedDesktopLogger | null = null;
 let pendingSecondInstanceFocus = false;
 let showExistingDesktop: (() => void) | null = null;
 
-function createPackagedDesktopStamp(namespace: string): SidecarStamp {
+async function createPackagedDesktopStamp(namespace: string): Promise<SidecarStamp> {
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: "desktop control",
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
   return {
     app: APP_KEYS.DESKTOP,
-    ipc: resolveAppIpcPath({
-      app: APP_KEYS.DESKTOP,
-      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-      namespace,
-    }),
+    endpoint,
     mode: SIDECAR_MODES.RUNTIME,
     namespace,
     source: SIDECAR_SOURCES.PACKAGED,
@@ -74,9 +79,15 @@ async function main(): Promise<void> {
   const argvStamp = readProcessStamp(process.argv.slice(1), OPEN_DESIGN_SIDECAR_CONTRACT);
   const namespace = argvStamp?.namespace ?? config.namespace;
   const paths = resolvePackagedNamespacePaths(config, namespace, process.env);
-  const stamp = argvStamp ?? createPackagedDesktopStamp(namespace);
+  const stamp = argvStamp ?? await createPackagedDesktopStamp(namespace);
 
   await ensurePackagedNamespacePaths(paths);
+  await writeAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint: stamp.endpoint,
+    namespaceRoot: paths.namespaceRoot,
+  });
   packagedLogger = createPackagedDesktopLogger(paths);
   attachPackagedDesktopProcessLogging({ logger: packagedLogger, paths, stamp });
   applyPackagedElectronPathOverrides(paths);
@@ -92,11 +103,11 @@ async function main(): Promise<void> {
   const identity = await writePackagedDesktopIdentity({ paths, stamp });
   await app.whenReady();
 
-  applyLaunchEnv(paths.runtimeRoot, stamp);
+  applyLaunchEnv(config.namespaceBaseRoot, stamp);
 
   const runtime = bootstrapSidecarRuntime(stamp, process.env, {
     app: APP_KEYS.DESKTOP,
-    base: paths.runtimeRoot,
+    base: config.namespaceBaseRoot,
     contract: OPEN_DESIGN_SIDECAR_CONTRACT,
   });
 

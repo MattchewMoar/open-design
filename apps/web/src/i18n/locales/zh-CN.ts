@@ -668,7 +668,7 @@ export const zhCN: Dict = {
   'useEverywhere.section.mcp.heading': '把 Open Design 暴露为任意代码智能体可用的 MCP 服务器',
   'useEverywhere.section.mcp.intro': 'Open Design 内置 Model Context Protocol 服务器（`od mcp`），让任何支持 MCP 的客户端（Cursor、Claude Code、Antigravity、VS Code Copilot Chat、openclaw、hermes）都能发现 Open Design 工具（列出技能、渲染预览、生成媒体、运行插件），无需手动 shell 调用。daemon 会通过 `GET /api/mcp/install-info` 为主流客户端发布可直接粘贴的安装片段。',
   'useEverywhere.section.mcp.bullet1': 'Stdio 传输 — 无需额外端口，客户端直接启动 `od mcp`。',
-  'useEverywhere.section.mcp.bullet2': '作为 sidecar 启动时，会通过本地 IPC 状态 socket 自动发现实时 daemon URL。',
+  'useEverywhere.section.mcp.bullet2': '作为 sidecar 启动时，会通过本地 sidecar 控制端点自动发现实时 daemon URL。',
   'useEverywhere.section.mcp.bullet3': '普通安装会回退到 `--daemon-url http://127.0.0.1:<port>`，确保 MCP 进程总能找到运行中的 daemon。',
   'useEverywhere.section.mcp.bullet4': '固定 `OD_DATA_DIR`，让派生的 MCP 进程写入 daemon 已使用的位置，避免打包 macOS app bundle 中的 EPERM 问题。',
   'useEverywhere.section.mcp.snippet1': '通用 MCP 客户端配置（适用于 Cursor、Claude Code、Codex 等）',

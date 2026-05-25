@@ -15,7 +15,14 @@ import {
   type DesktopUpdateResult,
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
-import { createSidecarLaunchEnv, requestJsonIpc, resolveAppIpcPath } from "@open-design/sidecar";
+import {
+  allocatePort,
+  createControlEndpoint,
+  createSidecarLaunchEnv,
+  readAppControlEndpoint,
+  requestJsonControl,
+  writeAppControlEndpoint,
+} from "@open-design/sidecar";
 import {
   collectProcessTreePids,
   createProcessStampArgs,
@@ -37,18 +44,36 @@ import type { DesktopRootIdentityFallback, DesktopRootIdentityMarker, MacCleanup
 const execFileAsync = promisify(execFile);
 const UPDATE_ACTION_TIMEOUT_MS = 10 * 60 * 1000;
 
-function desktopStamp(config: ToolPackConfig): SidecarStamp {
-  return {
+async function desktopStamp(config: ToolPackConfig): Promise<SidecarStamp> {
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: "desktop control",
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
+  const stamp = {
     app: APP_KEYS.DESKTOP,
-    ipc: resolveAppIpcPath({
-      app: APP_KEYS.DESKTOP,
-      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-      namespace: config.namespace,
-    }),
+    endpoint,
     mode: SIDECAR_MODES.RUNTIME,
     namespace: config.namespace,
     source: SIDECAR_SOURCES.TOOLS_PACK,
   };
+  await writeAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint,
+    namespaceRoot: config.roots.runtime.namespaceRoot,
+  });
+  return stamp;
+}
+
+async function desktopEndpoint(config: ToolPackConfig): Promise<string | null> {
+  return await readAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot: config.roots.runtime.namespaceRoot,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -155,16 +180,10 @@ async function resolveDesktopRootIdentityFallback(config: ToolPackConfig): Promi
     };
   }
 
-  const expectedIpc = resolveAppIpcPath({
-    app: APP_KEYS.DESKTOP,
-    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-    namespace: config.namespace,
-  });
   if (
     stamp.app !== APP_KEYS.DESKTOP ||
     stamp.mode !== SIDECAR_MODES.RUNTIME ||
     stamp.namespace !== config.namespace ||
-    stamp.ipc !== expectedIpc ||
     (stamp.source !== SIDECAR_SOURCES.PACKAGED && stamp.source !== SIDECAR_SOURCES.TOOLS_PACK)
   ) {
     return {
@@ -219,11 +238,13 @@ function isUnmanagedDesktopFallback(fallback: DesktopRootIdentityFallback | unde
 }
 
 async function waitForDesktopStatus(config: ToolPackConfig, timeoutMs = 45_000): Promise<DesktopStatusSnapshot | null> {
-  const stamp = desktopStamp(config);
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      return await requestJsonIpc<DesktopStatusSnapshot>(stamp.ipc, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 1000 });
+      const endpoint = await desktopEndpoint(config);
+      if (endpoint != null) {
+        return await requestJsonControl<DesktopStatusSnapshot>(endpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 1000 });
+      }
     } catch {
       await new Promise((resolveWait) => setTimeout(resolveWait, 200));
     }
@@ -521,7 +542,7 @@ export async function installPackedMacDmg(config: ToolPackConfig): Promise<MacIn
 
 export async function startPackedMacApp(config: ToolPackConfig): Promise<MacStartResult> {
   const target = await resolvePackedMacStartTarget(config);
-  const stamp = desktopStamp(config);
+  const stamp = await desktopStamp(config);
   const logPath = desktopLogPath(config);
   const launchConfigPath = await writeLaunchPackagedConfig(config, target.appPath);
   await mkdir(dirname(logPath), { recursive: true });
@@ -536,7 +557,7 @@ export async function startPackedMacApp(config: ToolPackConfig): Promise<MacStar
       cwd: target.appPath,
       detached: true,
       env: createSidecarLaunchEnv({
-        base: join(config.roots.runtime.namespaceRoot, "runtime"),
+        base: config.roots.runtime.namespaceBaseRoot,
         contract: OPEN_DESIGN_SIDECAR_CONTRACT,
         extraEnv: {
           ...process.env,
@@ -566,13 +587,13 @@ export async function startPackedMacApp(config: ToolPackConfig): Promise<MacStar
   if (status == null && delayedExit != null) {
     throw new Error(await createLaunchFailureMessage(config, target, {
       pid,
-      reason: `process exited before desktop IPC was available ${formatExit(delayedExit)}`,
+      reason: `process exited before desktop control endpoint was available ${formatExit(delayedExit)}`,
     }));
   }
   if (status == null && !isProcessAlive(pid)) {
     throw new Error(await createLaunchFailureMessage(config, target, {
       pid,
-      reason: "process exited before desktop IPC was available without an observed exit event",
+      reason: "process exited before desktop control endpoint was available without an observed exit event",
     }));
   }
   return {
@@ -622,13 +643,15 @@ async function waitForNoManagedDesktopProcesses(
 }
 
 export async function stopPackedMacApp(config: ToolPackConfig): Promise<MacStopResult> {
-  const stamp = desktopStamp(config);
   const before = await findManagedDesktopProcessTree(config);
   let gracefulRequested = false;
 
   try {
-    await requestJsonIpc(stamp.ipc, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
-    gracefulRequested = true;
+    const endpoint = await desktopEndpoint(config);
+    if (endpoint != null) {
+      await requestJsonControl(endpoint, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
+      gracefulRequested = true;
+    }
   } catch {
     gracefulRequested = false;
   }
@@ -684,32 +707,38 @@ function resolveUpdateAction(value: string | undefined): "status" | "check" | "d
 }
 
 export async function inspectPackedMacApp(config: ToolPackConfig, options: { expr?: string; path?: string; updateAction?: string }): Promise<MacInspectResult> {
-  const stamp = desktopStamp(config);
-  const status = await requestJsonIpc<DesktopStatusSnapshot>(
-    stamp.ipc,
-    { type: SIDECAR_MESSAGES.STATUS },
-    { timeoutMs: 2000 },
-  ).catch(() => null);
+  const endpoint = await desktopEndpoint(config);
+  const requireEndpoint = (): string => {
+    if (endpoint == null) throw new Error("desktop control endpoint is not available");
+    return endpoint;
+  };
+  const status = endpoint == null
+    ? null
+    : await requestJsonControl<DesktopStatusSnapshot>(
+      endpoint,
+      { type: SIDECAR_MESSAGES.STATUS },
+      { timeoutMs: 2000 },
+    ).catch(() => null);
   const updateAction = resolveUpdateAction(options.updateAction);
 
   return {
     ...(options.expr == null ? {} : {
-      eval: await requestJsonIpc<DesktopEvalResult>(
-        stamp.ipc,
+      eval: await requestJsonControl<DesktopEvalResult>(
+        requireEndpoint(),
         { input: { expression: options.expr }, type: SIDECAR_MESSAGES.EVAL },
         { timeoutMs: 5000 },
       ),
     }),
     ...(options.path == null ? {} : {
-      screenshot: await requestJsonIpc<DesktopScreenshotResult>(
-        stamp.ipc,
+      screenshot: await requestJsonControl<DesktopScreenshotResult>(
+        requireEndpoint(),
         { input: { path: options.path }, type: SIDECAR_MESSAGES.SCREENSHOT },
         { timeoutMs: 10000 },
       ),
     }),
     ...(updateAction == null ? {} : {
-      update: await requestJsonIpc<DesktopUpdateResult>(
-        stamp.ipc,
+      update: await requestJsonControl<DesktopUpdateResult>(
+        requireEndpoint(),
         { input: { action: updateAction }, type: SIDECAR_MESSAGES.UPDATE },
         { timeoutMs: UPDATE_ACTION_TIMEOUT_MS },
       ),

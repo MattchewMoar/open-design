@@ -5,7 +5,7 @@
  * Background: `tools-dev start daemon` followed by `tools-dev start desktop`
  * was leaving the daemon ungated because `OD_REQUIRE_DESKTOP_AUTH=1`
  * is only injected when daemon and desktop spawn together. The
- * helper now introspects the running daemon's STATUS over IPC and
+ * helper now introspects the running daemon's STATUS over the control endpoint and
  * restarts it (and web, if running) before launching desktop main
  * when the daemon reports `desktopAuthGateActive: false`.
  *
@@ -196,7 +196,7 @@ describe("ensureDaemonGateForDesktop", () => {
   });
 
   it("falls back to caller options (port:null) when the running URL has no port", async () => {
-    // Defensive: a malformed or IPC-only status URL should yield null
+    // Defensive: a malformed status URL should yield null
     // so the caller's existing options govern the restart, rather than
     // shipping a meaningless "0" port that would force a random port.
     const ungatedNullishUrl: DaemonStatusSnapshot = {

@@ -307,7 +307,7 @@ fronted by an HMAC gate when the daemon is paired with a desktop:
 - **Trust handshake.** At desktop main-process startup, before the
   `BrowserWindow` is created, desktop generates a fresh 32-byte secret
   (`randomBytes(32)`) and registers it with the daemon over the
-  daemon's sidecar IPC (`SIDECAR_MESSAGES.REGISTER_DESKTOP_AUTH`).
+  daemon's sidecar control endpoint (`SIDECAR_MESSAGES.REGISTER_DESKTOP_AUTH`).
 - **Token shape.** When the user picks a folder via the
   `dialog:pick-and-import` IPC, the desktop main process mints an HMAC
   token `${nonce}~${expISO}~${signatureB64url}` where
@@ -358,7 +358,7 @@ fronted by an HMAC gate when the daemon is paired with a desktop:
   `dialog:pick-and-import`, re-invokes its registration callback to
   re-handshake with the new daemon, mints a fresh token (new nonce + new
   exp — replay protection still works), and retries once. A persistent
-  failure (daemon truly down, IPC socket missing) surfaces in the
+  failure (daemon truly down, control endpoint missing) surfaces in the
   renderer toast instead of silently dropping. No desktop restart needed.
 - **Headless packaged mode.** The headless entrypoint
   (`apps/packaged/src/headless.ts`) starts daemon + web only — no

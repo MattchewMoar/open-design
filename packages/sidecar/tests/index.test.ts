@@ -3,8 +3,10 @@ import { join, resolve } from "node:path";
 
 import {
   bootstrapSidecarRuntime,
+  createControlEndpoint,
   createSidecarLaunchEnv,
-  resolveAppIpcPath,
+  normalizeControlEndpoint,
+  parseControlEndpoint,
   resolveAppRuntimePath,
   resolveNamespace,
   resolveNamespaceRoot,
@@ -23,15 +25,12 @@ type FakeStamp = SidecarStampShape & {
 const fakeContract: SidecarContractDescriptor<FakeStamp> = {
   defaults: {
     host: "127.0.0.1",
-    ipcBase: "/tmp/fake-product/ipc",
     namespace: "default",
     projectTmpDirName: ".fake-tmp",
-    windowsPipePrefix: "fake-product",
   },
   env: {
     base: "FAKE_BASE",
-    ipcBase: "FAKE_IPC_BASE",
-    ipcPath: "FAKE_IPC_PATH",
+    endpoint: "FAKE_ENDPOINT",
     namespace: "FAKE_NAMESPACE",
     source: "FAKE_SOURCE",
   },
@@ -53,7 +52,7 @@ const fakeContract: SidecarContractDescriptor<FakeStamp> = {
     const stamp = value as Partial<FakeStamp>;
     return {
       app: this.normalizeApp(stamp.app),
-      ipc: String(stamp.ipc),
+      endpoint: String(stamp.endpoint),
       mode: stamp.mode === "prod" ? "prod" : "dev",
       namespace: this.normalizeNamespace(stamp.namespace),
       source: this.normalizeSource(stamp.source),
@@ -83,10 +82,13 @@ describe("generic sidecar path boundary", () => {
     ).toBe(join(sourceRoot, "alpha", "ui", "cache"));
   });
 
-  it("resolves descriptor-specific IPC paths", () => {
-    expect(resolveAppIpcPath({ app: "ui", contract: fakeContract, namespace: "alpha" })).toBe(
-      process.platform === "win32" ? "\\\\.\\pipe\\fake-product-alpha-ui" : "/tmp/fake-product/ipc/alpha/ui.sock",
-    );
+  it("formats loopback control endpoints", () => {
+    expect(createControlEndpoint(17401)).toBe("tcp://127.0.0.1:17401");
+    expect(normalizeControlEndpoint("tcp://127.0.0.1:17401")).toBe("tcp://127.0.0.1:17401");
+    expect(normalizeControlEndpoint("tcp://127.0.0.1:17401/")).toBe("tcp://127.0.0.1:17401");
+    expect(parseControlEndpoint("tcp://127.0.0.1:17401")).toEqual({ host: "127.0.0.1", port: 17401 });
+    expect(() => createControlEndpoint(0)).toThrow();
+    expect(() => normalizeControlEndpoint("http://127.0.0.1:17401")).toThrow();
   });
 
   it("resolves namespace and base from descriptor env names", () => {
@@ -104,7 +106,7 @@ describe("generic sidecar bootstrap", () => {
   it("creates and validates launch env from descriptor env names", () => {
     const stamp: FakeStamp = {
       app: "api",
-      ipc: resolveAppIpcPath({ app: "api", contract: fakeContract, namespace: "alpha" }),
+      endpoint: createControlEndpoint(17401),
       mode: "dev",
       namespace: "alpha",
       source: "tool",
@@ -112,7 +114,7 @@ describe("generic sidecar bootstrap", () => {
 
     expect(createSidecarLaunchEnv({ base: "/runtime/base", contract: fakeContract, extraEnv: {}, stamp })).toEqual({
       FAKE_BASE: resolve("/runtime/base"),
-      FAKE_IPC_PATH: stamp.ipc,
+      FAKE_ENDPOINT: stamp.endpoint,
       FAKE_NAMESPACE: stamp.namespace,
       FAKE_SOURCE: stamp.source,
     });
@@ -122,7 +124,7 @@ describe("generic sidecar bootstrap", () => {
     ).toEqual({
       app: "api",
       base: resolve("/runtime/base"),
-      ipc: stamp.ipc,
+      endpoint: stamp.endpoint,
       mode: "dev",
       namespace: "alpha",
       source: "tool",

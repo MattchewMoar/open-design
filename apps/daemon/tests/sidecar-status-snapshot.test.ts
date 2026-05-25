@@ -8,14 +8,14 @@ import { withCurrentDesktopAuthGate } from '../src/sidecar/server.js';
 
 /**
  * PR #974 round 6 (mrcfps): tools-dev's split-start hardening reads
- * `desktopAuthGateActive` from the daemon's STATUS IPC. The wiring
+ * `desktopAuthGateActive` from the daemon's STATUS response. The wiring
  * is `withCurrentDesktopAuthGate(state)` which overlays the live
  * `isDesktopAuthGateActive()` flag on the cached startup snapshot.
  *
  * These tests pin the contract: the field MUST reflect the current
  * gate state at every snapshot read (not the value cached when the
  * sidecar booted), because the flag flips after the first
- * `REGISTER_DESKTOP_AUTH` IPC and stays sticky for the daemon's
+ * `REGISTER_DESKTOP_AUTH` control message and stays sticky for the daemon's
  * lifetime. A regression that caches the flag in `state` would
  * silently break tools-dev's restart-on-ungated-daemon detection.
  *

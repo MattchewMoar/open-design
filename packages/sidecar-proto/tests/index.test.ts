@@ -9,13 +9,14 @@ import {
   normalizeDaemonSidecarMessage,
   normalizeDesktopSidecarMessage,
   normalizeNamespace,
+  normalizeSidecarEndpoint,
   normalizeSidecarStamp,
   OPEN_DESIGN_SIDECAR_CONTRACT,
   SIDECAR_MESSAGES,
   SIDECAR_SOURCES,
   SIDECAR_STAMP_FIELDS,
   STAMP_APP_FLAG,
-  STAMP_IPC_FLAG,
+  STAMP_ENDPOINT_FLAG,
   STAMP_MODE_FLAG,
   STAMP_NAMESPACE_FLAG,
   STAMP_SOURCE_FLAG,
@@ -24,7 +25,7 @@ import {
 
 const validStamp = {
   app: APP_KEYS.WEB,
-  ipc: "/tmp/open-design/ipc/contract-check/web.sock",
+  endpoint: "tcp://127.0.0.1:17401",
   mode: "dev" as const,
   namespace: "contract-check",
   source: SIDECAR_SOURCES.TOOLS_DEV,
@@ -32,10 +33,10 @@ const validStamp = {
 
 describe("open-design sidecar contract", () => {
   it("exports the canonical five-field stamp descriptor", () => {
-    expect(SIDECAR_STAMP_FIELDS).toEqual(["app", "mode", "namespace", "ipc", "source"]);
+    expect(SIDECAR_STAMP_FIELDS).toEqual(["app", "mode", "namespace", "endpoint", "source"]);
     expect(OPEN_DESIGN_SIDECAR_CONTRACT.stampFlags).toEqual({
       app: STAMP_APP_FLAG,
-      ipc: STAMP_IPC_FLAG,
+      endpoint: STAMP_ENDPOINT_FLAG,
       mode: STAMP_MODE_FLAG,
       namespace: STAMP_NAMESPACE_FLAG,
       source: STAMP_SOURCE_FLAG,
@@ -57,8 +58,14 @@ describe("open-design sidecar contract", () => {
     expect(() => normalizeNamespace("contract check")).toThrow();
   });
 
-  it("accepts exactly app, mode, namespace, ipc, and source", () => {
+  it("accepts exactly app, mode, namespace, endpoint, and source", () => {
     expect(normalizeSidecarStamp(validStamp)).toEqual(validStamp);
+  });
+
+  it("normalizes loopback TCP endpoints", () => {
+    expect(normalizeSidecarEndpoint("tcp://127.0.0.1:17401")).toBe("tcp://127.0.0.1:17401");
+    expect(normalizeSidecarEndpoint("tcp://127.0.0.1:17401/")).toBe("tcp://127.0.0.1:17401");
+    expect(() => normalizeSidecarEndpoint("http://127.0.0.1:17401")).toThrow();
   });
 
   it("rejects legacy or extra stamp fields", () => {
@@ -70,7 +77,7 @@ describe("open-design sidecar contract", () => {
     expect(() => normalizeSidecarStamp({ ...validStamp, source: "custom-script" })).toThrow();
   });
 
-  it("validates daemon IPC messages", () => {
+  it("validates daemon control messages", () => {
     expect(normalizeDaemonSidecarMessage({ type: SIDECAR_MESSAGES.STATUS })).toEqual({ type: "status" });
     expect(normalizeDaemonSidecarMessage({ type: SIDECAR_MESSAGES.SHUTDOWN })).toEqual({ type: "shutdown" });
     expect(() => normalizeDaemonSidecarMessage({ input: {}, type: SIDECAR_MESSAGES.EVAL })).toThrow();
@@ -105,7 +112,7 @@ describe("open-design sidecar contract", () => {
     ).toThrow();
   });
 
-  it("validates desktop IPC message inputs", () => {
+  it("validates desktop control message inputs", () => {
     expect(normalizeDesktopSidecarMessage({ input: { expression: "location.href" }, type: SIDECAR_MESSAGES.EVAL })).toEqual({
       input: { expression: "location.href" },
       type: "eval",
@@ -117,7 +124,7 @@ describe("open-design sidecar contract", () => {
   it("requires DaemonStatusSnapshot to carry desktopAuthGateActive (PR #974 round 6)", () => {
     // The TS compiler enforces that `desktopAuthGateActive: boolean` is
     // present on every constructed snapshot — tools-dev's split-start
-    // hardening relies on the daemon STATUS IPC carrying this field so
+    // hardening relies on the daemon STATUS response carrying this field so
     // `start desktop` can detect an ungated already-running daemon and
     // restart it before launching desktop main. Removing the field, or
     // softening it to optional, must fail this build.
@@ -135,7 +142,7 @@ describe("open-design sidecar contract", () => {
     expect(dormant.desktopAuthGateActive).toBe(false);
   });
 
-  it("validates desktop PDF export IPC message inputs", () => {
+  it("validates desktop PDF export control message inputs", () => {
     expect(
       normalizeDesktopSidecarMessage({
         input: {
@@ -171,7 +178,7 @@ describe("open-design sidecar contract", () => {
     ).toThrow();
   });
 
-  it("validates desktop update IPC message inputs", () => {
+  it("validates desktop update control message inputs", () => {
     expect(
       normalizeDesktopSidecarMessage({
         input: { action: DESKTOP_UPDATE_ACTIONS.CHECK },

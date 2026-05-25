@@ -668,7 +668,7 @@ export const en: Dict = {
   'useEverywhere.section.mcp.heading': 'Expose Open Design as an MCP server to any coding agent',
   'useEverywhere.section.mcp.intro': 'Open Design ships with a Model Context Protocol server (`od mcp`) that lets any MCP-capable client — Cursor, Claude Code, Antigravity, VS Code Copilot Chat, openclaw, hermes — discover Open Design tools (list skills, render previews, generate media, run plugins) without shelling out manually. The daemon publishes a ready-to-paste install snippet via `GET /api/mcp/install-info` for each major client.',
   'useEverywhere.section.mcp.bullet1': 'Stdio transport — no extra port, the client spawns `od mcp` directly.',
-  'useEverywhere.section.mcp.bullet2': 'Auto-discovers the live daemon URL via the local IPC status socket when launched as a sidecar.',
+  'useEverywhere.section.mcp.bullet2': 'Auto-discovers the live daemon URL via the local sidecar control endpoint when launched as a sidecar.',
   'useEverywhere.section.mcp.bullet3': 'Falls back to `--daemon-url http://127.0.0.1:<port>` for plain installs so the MCP process always finds a running daemon.',
   'useEverywhere.section.mcp.bullet4': 'Pins `OD_DATA_DIR` so the spawned MCP process writes to the same place the daemon already uses (avoids EPERM in packaged macOS app bundles).',
   'useEverywhere.section.mcp.snippet1': 'Generic MCP client config (works in Cursor, Claude Code, Codex, …)',

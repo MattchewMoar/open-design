@@ -6,28 +6,46 @@ import {
   type DesktopStatusSnapshot,
   type WebStatusSnapshot,
 } from "@open-design/sidecar-proto";
-import { requestJsonIpc, resolveAppIpcPath } from "@open-design/sidecar";
+import { readAppControlEndpoint, requestJsonControl, resolveNamespaceRoot } from "@open-design/sidecar";
 
 export type AppRuntimeLookup = {
   base: string;
   namespace: string;
 };
 
-export function resolveDaemonIpcPath(runtime: AppRuntimeLookup): string {
-  return resolveAppIpcPath({ app: APP_KEYS.DAEMON, contract: OPEN_DESIGN_SIDECAR_CONTRACT, namespace: runtime.namespace });
+function namespaceRoot(runtime: AppRuntimeLookup): string {
+  return resolveNamespaceRoot({ base: runtime.base, contract: OPEN_DESIGN_SIDECAR_CONTRACT, namespace: runtime.namespace });
 }
 
-export function resolveWebIpcPath(runtime: AppRuntimeLookup): string {
-  return resolveAppIpcPath({ app: APP_KEYS.WEB, contract: OPEN_DESIGN_SIDECAR_CONTRACT, namespace: runtime.namespace });
+export async function resolveDaemonEndpoint(runtime: AppRuntimeLookup): Promise<string | null> {
+  return await readAppControlEndpoint({
+    app: APP_KEYS.DAEMON,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot: namespaceRoot(runtime),
+  });
 }
 
-export function resolveDesktopIpcPath(runtime: AppRuntimeLookup): string {
-  return resolveAppIpcPath({ app: APP_KEYS.DESKTOP, contract: OPEN_DESIGN_SIDECAR_CONTRACT, namespace: runtime.namespace });
+export async function resolveWebEndpoint(runtime: AppRuntimeLookup): Promise<string | null> {
+  return await readAppControlEndpoint({
+    app: APP_KEYS.WEB,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot: namespaceRoot(runtime),
+  });
+}
+
+export async function resolveDesktopEndpoint(runtime: AppRuntimeLookup): Promise<string | null> {
+  return await readAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot: namespaceRoot(runtime),
+  });
 }
 
 export async function inspectDaemonRuntime(runtime: AppRuntimeLookup, timeoutMs = 800): Promise<DaemonStatusSnapshot | null> {
+  const endpoint = await resolveDaemonEndpoint(runtime);
+  if (endpoint == null) return null;
   try {
-    return await requestJsonIpc<DaemonStatusSnapshot>(resolveDaemonIpcPath(runtime), { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs });
+    return await requestJsonControl<DaemonStatusSnapshot>(endpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs });
   } catch {
     return null;
   }
@@ -44,8 +62,10 @@ export async function waitForDaemonRuntime(runtime: AppRuntimeLookup, timeoutMs 
 }
 
 export async function inspectWebRuntime(runtime: AppRuntimeLookup, timeoutMs = 800): Promise<WebStatusSnapshot | null> {
+  const endpoint = await resolveWebEndpoint(runtime);
+  if (endpoint == null) return null;
   try {
-    return await requestJsonIpc<WebStatusSnapshot>(resolveWebIpcPath(runtime), { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs });
+    return await requestJsonControl<WebStatusSnapshot>(endpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs });
   } catch {
     return null;
   }
@@ -62,8 +82,10 @@ export async function waitForWebRuntime(runtime: AppRuntimeLookup, timeoutMs = 3
 }
 
 export async function inspectDesktopRuntime(runtime: AppRuntimeLookup, timeoutMs = 800): Promise<DesktopStatusSnapshot | null> {
+  const endpoint = await resolveDesktopEndpoint(runtime);
+  if (endpoint == null) return null;
   try {
-    return await requestJsonIpc<DesktopStatusSnapshot>(resolveDesktopIpcPath(runtime), { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs });
+    return await requestJsonControl<DesktopStatusSnapshot>(endpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs });
   } catch {
     return null;
   }

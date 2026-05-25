@@ -15,12 +15,12 @@ import { APP_KEYS } from "@open-design/sidecar-proto";
  * before the desktop's first registration POST.
  *
  * This helper closes that window by introspecting the running
- * daemon's STATUS over IPC and, if the daemon reports
+ * daemon's STATUS over the sidecar control endpoint and, if the daemon reports
  * `desktopAuthGateActive: false`, restarting the daemon (and web,
  * if running) with the env var pinned BEFORE desktop main is
  * launched. The bundled-targets path (`pnpm tools-dev`) is
  * unaffected because trigger (A) already armed the gate at the
- * daemon's first spawn, so the helper is a single ~800ms IPC
+ * daemon's first spawn, so the helper is a single ~800ms control
  * roundtrip that returns no-op.
  *
  * Pure helper with injected deps so the regression test in
@@ -41,7 +41,7 @@ export type EnsureDaemonGateDeps = {
    * restart preserves the running daemon's port so a stack started with
    * `--daemon-port <N>` does not get silently moved to a random port.
    * `port` is null when the running daemon's URL did not expose a port
-   * (e.g. an IPC-only mode); in that case the closure must fall back to
+   * (e.g. status is unavailable); in that case the closure must fall back to
    * whatever port the original CLI options carried.
    */
   startDaemonGated: (opts: { port: number | null; webPort: number | null }) => Promise<void>;

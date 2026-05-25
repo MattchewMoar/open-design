@@ -299,7 +299,7 @@ const INFO_PAGE_COPY: Partial<Record<LandingLocaleCode, InfoPageCopy>> = {
       fullNotes: 'Full notes live in QUICKSTART.md.',
       expectedTitle: 'What you should see',
       expectedBody:
-        'When pnpm tools-dev is healthy, the terminal reports the daemon, web runtime, and sidecar IPC namespace as ready:',
+        'When pnpm tools-dev is healthy, the terminal reports the daemon, web runtime, and sidecar control endpoint as ready:',
       expectedPorts:
         'The exact ports come from your tools-dev flags (--daemon-port, --web-port); defaults are stable across runs.',
       troubleshootingTitle: 'Troubleshooting',
@@ -610,7 +610,7 @@ INFO_PAGE_COPY.zh = {
     ],
     fullNotes: '完整说明见 QUICKSTART.md。',
     expectedTitle: '你应该看到什么',
-    expectedBody: '当 pnpm tools-dev 正常时，终端会显示 daemon、Web runtime 和 sidecar IPC namespace 已 ready：',
+    expectedBody: '当 pnpm tools-dev 正常时，终端会显示 daemon、Web runtime 和 sidecar 控制端点已 ready：',
     expectedPorts: '实际端口由 tools-dev 参数决定（--daemon-port、--web-port）；默认值在多次运行中保持稳定。',
     troubleshootingTitle: '排障',
     troubleshooting: [
@@ -844,7 +844,7 @@ INFO_PAGE_COPY['zh-tw'] = {
     ],
     fullNotes: '完整說明見 QUICKSTART.md。',
     expectedTitle: '你應該看到什麼',
-    expectedBody: '當 pnpm tools-dev 正常時，終端會顯示 daemon、Web runtime 與 sidecar IPC namespace 已 ready：',
+    expectedBody: '當 pnpm tools-dev 正常時，終端會顯示 daemon、Web runtime 與 sidecar 控制端點已 ready：',
     expectedPorts: '實際連接埠由 tools-dev 參數決定（--daemon-port、--web-port）；預設值在多次執行中保持穩定。',
     troubleshootingTitle: '排障',
     troubleshooting: [

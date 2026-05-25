@@ -286,7 +286,7 @@ export type DesktopRuntime = {
 
 export type DesktopRuntimeOptions = {
   // Per-process secret shared with the daemon at startup (over its
-  // sidecar IPC) so the main process can mint HMAC tokens for the
+  // sidecar control channel) so the main process can mint HMAC tokens for the
   // `dialog:pick-and-import` flow. The secret stays in main-process
   // memory for the runtime lifetime even if the initial registration
   // missed its window — round-5 (lefarcen P1, mrcfps) added a lazy

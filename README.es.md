@@ -71,7 +71,7 @@ OD se apoya en cuatro hombros open source:
 | **Imports** | Suelta un ZIP exportado desde [Claude Design][cd] en el diálogo de bienvenida: `POST /api/import/claude-design` lo parsea en un proyecto real para que tu agente siga editando donde Anthropic lo dejó |
 | **Persistencia** | SQLite en `.od/app.sqlite`: projects · conversations · messages · tabs · saved templates. Reabre mañana y la tarjeta de todo y los archivos abiertos estarán exactamente donde los dejaste. |
 | **Lifecycle** | Un punto de entrada: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check): arranca daemon + web (+ desktop) bajo sidecar stamps tipados |
-| **Desktop** | Shell Electron opcional con renderer sandboxed + sidecar IPC (STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN) — impulsa `tools-dev inspect desktop screenshot` para E2E |
+| **Desktop** | Shell Electron opcional con renderer sandboxed + sidecar control endpoint (STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN) — impulsa `tools-dev inspect desktop screenshot` para E2E |
 | **Desplegable en** | Local (`pnpm tools-dev`) · capa web en Vercel · Electron empaquetado (placeholder, en curso) |
 | **Licencia** | Apache-2.0 |
 
@@ -283,7 +283,7 @@ Cada capa es componible. Cada capa es un archivo que puedes editar. Lee [`apps/d
    │  /api/upload          /api/projects/:id/files…
    │  /artifacts (static)  /frames (static)
    │
-   │  optional: sidecar IPC at /tmp/open-design/ipc/<ns>/<app>.sock
+   │  optional: sidecar control endpoint at tcp://127.0.0.1:<port>
    │  (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN)
    └─────────┬────────────────────────┘
              │ spawn(cli, [...], { cwd: .od/projects/<id> })
@@ -305,7 +305,7 @@ Cada capa es componible. Cada capa es un archivo que puedes editar. Lee [`apps/d
 | Preview | Iframe sandboxed via `srcdoc` + parser `<artifact>` por skill ([`apps/web/src/artifacts/parser.ts`](apps/web/src/artifacts/parser.ts)) |
 | Export | HTML (assets inline) · PDF (browser print, deck-aware) · PPTX (agent-driven via skill) · ZIP (archiver) · Markdown |
 | Lifecycle | `pnpm tools-dev start \| stop \| run \| status \| logs \| inspect \| check`; puertos via `--daemon-port` / `--web-port`, namespaces via `--namespace` |
-| Desktop (opcional) | Shell Electron: descubre la URL web mediante sidecar IPC, sin adivinar puertos; el mismo canal `STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN` impulsa `tools-dev inspect desktop …` para E2E |
+| Desktop (opcional) | Shell Electron: descubre la URL web mediante sidecar control endpoint, sin adivinar puertos; el mismo canal `STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN` impulsa `tools-dev inspect desktop …` para E2E |
 
 ## Quickstart
 
@@ -395,7 +395,7 @@ pnpm tools-dev inspect desktop status
 pnpm tools-dev inspect desktop screenshot --path /tmp/open-design.png
 ```
 
-La app desktop descubre la URL web automáticamente mediante sidecar IPC — no hace falta adivinar puertos.
+La app desktop descubre la URL web automáticamente mediante sidecar control endpoint — no hace falta adivinar puertos.
 
 ### Otros comandos útiles
 
@@ -649,7 +649,7 @@ El bucle chat / artifact se lleva el foco, pero ya hay varias capacidades menos 
 - **Templates guardados por usuario.** Cuando te gusta un render, `POST /api/templates` guarda snapshot del HTML + metadata en la tabla SQLite `templates`. El siguiente proyecto lo elige desde una fila "your templates" en el selector: la misma superficie que las 31 shipped, pero tuya.
 - **Persistencia de pestañas.** Cada proyecto recuerda archivos abiertos y la pestaña activa en la tabla `tabs`. Reabre mañana y el workspace luce exactamente como lo dejaste.
 - **Artifact lint API.** `POST /api/artifacts/lint` ejecuta checks estructurales sobre un artefacto generado (framing `<artifact>` roto, side files requeridos faltantes, tokens de paleta stale) y devuelve findings que el agente puede leer en su siguiente turno. La autocrítica five-dim usa esto para anclar su score en evidencia real, no vibes.
-- **Sidecar protocol + desktop automation.** Los procesos daemon, web y desktop llevan stamps tipados de cinco campos (`app · mode · namespace · ipc · source`) y exponen un canal JSON-RPC IPC en `/tmp/open-design/ipc/<namespace>/<app>.sock`. `tools-dev inspect desktop status \| eval \| screenshot` usa ese canal, así E2E headless corre contra un shell Electron real sin harness bespoke ([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
+- **Sidecar protocol + desktop automation.** Los procesos daemon, web y desktop llevan stamps tipados de cinco campos (`app · mode · namespace · endpoint · source`) y exponen un endpoint JSON-RPC de contrôle en `tcp://127.0.0.1:<port>`. `tools-dev inspect desktop status \| eval \| screenshot` usa ese canal, así E2E headless corre contra un shell Electron real sin harness bespoke ([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
 - **Spawning amigable con Windows.** Todo adapter que normalmente rompería el límite de argv de `CreateProcess` (~32 KB) con prompts compuestos largos (Codex, Gemini, OpenCode, Cursor Agent, Qwen, Qoder CLI, Pi) envía el prompt por stdin. Claude Code y Copilot mantienen `-p`; el daemon cae a un prompt-file temporal cuando incluso eso se desborda.
 - **Datos runtime por namespace.** `OD_DATA_DIR` y `--namespace` te dan árboles `.od/` totalmente aislados, así Playwright, canales beta y tus proyectos reales nunca comparten SQLite.
 

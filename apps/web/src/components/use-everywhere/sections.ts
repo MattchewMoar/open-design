@@ -155,7 +155,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       'snippet via `GET /api/mcp/install-info` for each major client.',
     bullets: [
       'Stdio transport — no extra port, the client spawns `od mcp` directly.',
-      'Auto-discovers the live daemon URL via the local IPC status socket when launched as a sidecar.',
+      'Auto-discovers the live daemon URL via the local sidecar control endpoint when launched as a sidecar.',
       'Falls back to `--daemon-url http://127.0.0.1:<port>` for plain installs so the MCP process always finds a running daemon.',
       'Pins `OD_DATA_DIR` so the spawned MCP process writes to the same place the daemon already uses (avoids EPERM in packaged macOS app bundles).',
     ],

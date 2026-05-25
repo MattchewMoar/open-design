@@ -73,7 +73,7 @@ OD dört açık kaynak omuz üzerinde durur:
 | **Import'lar** | Bir [Claude Design][cd] export ZIP'ini welcome dialog'a bırak — `POST /api/import/claude-design` onu gerçek bir projeye parse eder, böylece agent Anthropic'in bıraktığı yerden düzenlemeyi sürdürebilir |
 | **Kalıcılık** | `.od/app.sqlite`: projects · conversations · messages · tabs · saved templates. Yarın tekrar açtığında todo card ve açık dosyalar bıraktığın yerdedir. |
 | **Lifecycle** | Tek giriş noktası: `pnpm tools-dev` (start / stop / run / status / logs / inspect / check) — typed sidecar stamp'ler altında daemon + web (+ desktop) başlatır |
-| **Desktop** | Sandbox renderer + sidecar IPC içeren opsiyonel Electron shell (STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN) — E2E için `tools-dev inspect desktop screenshot` çalıştırır |
+| **Desktop** | Sandbox renderer + sidecar control endpoint içeren opsiyonel Electron shell (STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN) — E2E için `tools-dev inspect desktop screenshot` çalıştırır |
 | **Dağıtılabilir hedefler** | Local (`pnpm tools-dev`) · Vercel web katmanı · macOS (Apple Silicon) ve Windows (x64) için paketlenmiş Electron desktop app — [open-design.ai](https://open-design.ai/) veya [latest release](https://github.com/nexu-io/open-design/releases) üzerinden indir |
 | **Lisans** | Apache-2.0 |
 
@@ -297,7 +297,7 @@ claude · codex · devin (ACP) · gemini · opencode · cursor-agent · qwen · 
 | Preview | `srcdoc` ile sandbox iframe + skill başına `<artifact>` parser ([`apps/web/src/artifacts/parser.ts`](apps/web/src/artifacts/parser.ts)) |
 | Export | HTML (inline asset'ler) · PDF (browser print, deck-aware) · PPTX (agent-driven via skill) · ZIP (archiver) · Markdown |
 | Lifecycle | `pnpm tools-dev start \| stop \| run \| status \| logs \| inspect \| check`; port'lar `--daemon-port` / `--web-port`, namespace'ler `--namespace` |
-| Desktop (opsiyonel) | Electron shell — web URL'ini sidecar IPC üzerinden bulur, port tahmini yok; aynı `STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN` kanalı E2E için `tools-dev inspect desktop ...` sağlar |
+| Desktop (opsiyonel) | Electron shell — web URL'ini sidecar control endpoint üzerinden bulur, port tahmini yok; aynı `STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN` kanalı E2E için `tools-dev inspect desktop ...` sağlar |
 
 ## Quickstart
 
@@ -534,7 +534,7 @@ pnpm tools-dev inspect desktop status
 pnpm tools-dev inspect desktop screenshot --path /tmp/open-design.png
 ```
 
-Desktop app web URL'ini sidecar IPC üzerinden otomatik bulur; port tahmini gerekmez.
+Desktop app web URL'ini sidecar control endpoint üzerinden otomatik bulur; port tahmini gerekmez.
 
 ### Diğer faydalı komutlar
 
@@ -745,7 +745,7 @@ Chat / artefakt döngüsü spot ışığını alır, ama OD'yi başka şeylerle 
 - **Kullanıcı kayıtlı template'leri.** Render'ı beğenince `POST /api/templates` HTML + metadata'yı SQLite `templates` tablosuna snapshot'lar. Sonraki proje picker'daki "your templates" satırından onu seçer; gönderilen 31 ile aynı yüzey, ama senin.
 - **Tab persistence.** Her proje açık dosyalarını ve aktif tab'ını `tabs` tablosunda hatırlar. Yarın projeyi tekrar aç, workspace bıraktığın gibi görünür.
 - **Artifact lint API.** `POST /api/artifacts/lint`, üretilmiş artefakt üzerinde structural check'ler çalıştırır (bozuk `<artifact>` framing, eksik required side file'lar, stale palette token'ları) ve agent'ın sonraki turda okuyabileceği finding'ler döndürür. Beş boyutlu self-critique, skorunu vibe'a değil gerçek kanıta bağlamak için bunu kullanır.
-- **Sidecar protocol + desktop automation.** Daemon, web ve desktop process'leri typed five-field stamp taşır (`app · mode · namespace · ipc · source`) ve `/tmp/open-design/ipc/<namespace>/<app>.sock` üzerinde JSON-RPC IPC kanalı açar. `tools-dev inspect desktop status \| eval \| screenshot` bu kanalı sürer; böylece headless E2E, özel harness olmadan gerçek Electron shell'e karşı çalışır ([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
+- **Sidecar protocol + desktop automation.** Daemon, web ve desktop process'leri typed five-field stamp taşır (`app · mode · namespace · endpoint · source`) ve `tcp://127.0.0.1:<port>` üzerinde JSON-RPC control kanalı açar. `tools-dev inspect desktop status \| eval \| screenshot` bu kanalı sürer; böylece headless E2E, özel harness olmadan gerçek Electron shell'e karşı çalışır ([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
 - **Windows dostu spawn.** Uzun composed prompt'larda `CreateProcess`'in ~32 KB argv limitini patlatabilecek her adapter (Codex, Gemini, OpenCode, Cursor Agent, Qwen, Qoder CLI, Pi) prompt'u stdin üzerinden verir. Claude Code ve Copilot `-p` tutar; daemon o bile taşarsa temp prompt-file'a düşer.
 - **Namespace başına runtime data.** `OD_DATA_DIR` ve `--namespace`, tamamen izole `.od/` tarzı ağaçlar sağlar; Playwright, beta channel'lar ve gerçek projelerin aynı SQLite dosyasını asla paylaşmaz.
 

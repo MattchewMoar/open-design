@@ -13,7 +13,14 @@ import {
   type DesktopUpdateResult,
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
-import { createSidecarLaunchEnv, requestJsonIpc, resolveAppIpcPath } from "@open-design/sidecar";
+import {
+  allocatePort,
+  createControlEndpoint,
+  createSidecarLaunchEnv,
+  readAppControlEndpoint,
+  requestJsonControl,
+  writeAppControlEndpoint,
+} from "@open-design/sidecar";
 import {
   collectProcessTreePids,
   createProcessStampArgs,
@@ -53,14 +60,36 @@ import type {
 const PACKAGED_CONFIG_PATH_ENV = "OD_PACKAGED_CONFIG_PATH";
 const UPDATE_ACTION_TIMEOUT_MS = 10 * 60 * 1000;
 
-function desktopStamp(config: ToolPackConfig): SidecarStamp {
-  return {
+async function desktopStamp(config: ToolPackConfig): Promise<SidecarStamp> {
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: "desktop control",
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
+  const stamp = {
     app: APP_KEYS.DESKTOP,
-    ipc: resolveAppIpcPath({ app: APP_KEYS.DESKTOP, contract: OPEN_DESIGN_SIDECAR_CONTRACT, namespace: config.namespace }),
+    endpoint,
     mode: SIDECAR_MODES.RUNTIME,
     namespace: config.namespace,
     source: SIDECAR_SOURCES.TOOLS_PACK,
   };
+  await writeAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint,
+    namespaceRoot: config.roots.runtime.namespaceRoot,
+  });
+  return stamp;
+}
+
+async function desktopEndpoint(config: ToolPackConfig): Promise<string | null> {
+  return await readAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot: config.roots.runtime.namespaceRoot,
+  });
 }
 
 function desktopLogPath(config: ToolPackConfig): string {
@@ -72,11 +101,13 @@ function desktopIdentityPath(config: ToolPackConfig): string {
 }
 
 async function waitForDesktopStatus(config: ToolPackConfig, timeoutMs = 45_000): Promise<DesktopStatusSnapshot | null> {
-  const stamp = desktopStamp(config);
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      return await requestJsonIpc<DesktopStatusSnapshot>(stamp.ipc, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 1000 });
+      const endpoint = await desktopEndpoint(config);
+      if (endpoint != null) {
+        return await requestJsonControl<DesktopStatusSnapshot>(endpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 1000 });
+      }
     } catch {
       await new Promise((resolveWait) => setTimeout(resolveWait, 200));
     }
@@ -198,7 +229,7 @@ async function resolveStartTarget(config: ToolPackConfig): Promise<{ configPath:
 
 export async function startPackedWinApp(config: ToolPackConfig): Promise<WinStartResult> {
   const target = await resolveStartTarget(config);
-  const stamp = desktopStamp(config);
+  const stamp = await desktopStamp(config);
   const logPath = desktopLogPath(config);
   await mkdir(dirname(logPath), { recursive: true });
   await writeFile(logPath, "", "utf8");
@@ -207,7 +238,7 @@ export async function startPackedWinApp(config: ToolPackConfig): Promise<WinStar
     command: target.executablePath,
     cwd: dirname(target.executablePath),
     env: createSidecarLaunchEnv({
-      base: join(config.roots.runtime.namespaceRoot, "runtime"),
+      base: config.roots.runtime.namespaceBaseRoot,
       contract: OPEN_DESIGN_SIDECAR_CONTRACT,
       extraEnv: {
         ...process.env,
@@ -242,12 +273,14 @@ async function waitForNoManagedDesktopProcesses(config: ToolPackConfig, timeoutM
 }
 
 export async function stopPackedWinApp(config: ToolPackConfig): Promise<WinStopResult> {
-  const stamp = desktopStamp(config);
   const before = await findManagedDesktopProcessTree(config);
   let gracefulRequested = false;
   try {
-    await requestJsonIpc(stamp.ipc, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
-    gracefulRequested = true;
+    const endpoint = await desktopEndpoint(config);
+    if (endpoint != null) {
+      await requestJsonControl(endpoint, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
+      gracefulRequested = true;
+    }
   } catch {
     gracefulRequested = false;
   }
@@ -415,27 +448,33 @@ function resolveUpdateAction(value: string | undefined): "status" | "check" | "d
 }
 
 export async function inspectPackedWinApp(config: ToolPackConfig, options: { expr?: string; path?: string; updateAction?: string }): Promise<WinInspectResult> {
-  const stamp = desktopStamp(config);
-  const status = await requestJsonIpc<DesktopStatusSnapshot>(stamp.ipc, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 2000 }).catch(() => null);
+  const endpoint = await desktopEndpoint(config);
+  const requireEndpoint = (): string => {
+    if (endpoint == null) throw new Error("desktop control endpoint is not available");
+    return endpoint;
+  };
+  const status = endpoint == null
+    ? null
+    : await requestJsonControl<DesktopStatusSnapshot>(endpoint, { type: SIDECAR_MESSAGES.STATUS }, { timeoutMs: 2000 }).catch(() => null);
   const updateAction = resolveUpdateAction(options.updateAction);
   return {
     ...(options.expr == null ? {} : {
-      eval: await requestJsonIpc<DesktopEvalResult>(
-        stamp.ipc,
+      eval: await requestJsonControl<DesktopEvalResult>(
+        requireEndpoint(),
         { input: { expression: options.expr }, type: SIDECAR_MESSAGES.EVAL },
         { timeoutMs: 5000 },
       ),
     }),
     ...(options.path == null ? {} : {
-      screenshot: await requestJsonIpc<DesktopScreenshotResult>(
-        stamp.ipc,
+      screenshot: await requestJsonControl<DesktopScreenshotResult>(
+        requireEndpoint(),
         { input: { path: options.path }, type: SIDECAR_MESSAGES.SCREENSHOT },
         { timeoutMs: 10000 },
       ),
     }),
     ...(updateAction == null ? {} : {
-      update: await requestJsonIpc<DesktopUpdateResult>(
-        stamp.ipc,
+      update: await requestJsonControl<DesktopUpdateResult>(
+        requireEndpoint(),
         { input: { action: updateAction }, type: SIDECAR_MESSAGES.UPDATE },
         { timeoutMs: UPDATE_ACTION_TIMEOUT_MS },
       ),

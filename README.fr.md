@@ -72,7 +72,7 @@ OD s’appuie sur quatre projets open source :
 | **Imports** | Déposez un ZIP exporté depuis [Claude Design][cd] dans le welcome dialog : `POST /api/import/claude-design` le convertit en vrai projet pour que votre agent continue là où Anthropic s’est arrêté |
 | **Persistance** | SQLite dans `.od/app.sqlite` : projects · conversations · messages · tabs · saved templates. Rouvrez demain, la todo card et les fichiers ouverts sont au même endroit. |
 | **Lifecycle** | Un seul point d’entrée : `pnpm tools-dev` (start / stop / run / status / logs / inspect / check), qui démarre daemon + web (+ desktop) avec des typed sidecar stamps |
-| **Desktop** | Shell Electron optionnel avec renderer sandboxé + sidecar IPC (STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN), utilisé par `tools-dev inspect desktop screenshot` pour l’E2E |
+| **Desktop** | Shell Electron optionnel avec renderer sandboxé + sidecar control endpoint (STATUS / EVAL / SCREENSHOT / CONSOLE / CLICK / SHUTDOWN), utilisé par `tools-dev inspect desktop screenshot` pour l’E2E |
 | **Déployable sur** | Local (`pnpm tools-dev`) · couche web Vercel · application desktop Electron empaquetée pour macOS (Apple Silicon) et Windows (x64) — téléchargement sur [open-design.ai](https://open-design.ai/) ou la [dernière release](https://github.com/nexu-io/open-design/releases) |
 | **Licence** | Apache-2.0 |
 
@@ -284,7 +284,7 @@ Chaque couche est composable. Chaque couche est un fichier éditable. Lisez [`ap
    │  /api/upload          /api/projects/:id/files…
    │  /artifacts (static)  /frames (static)
    │
-   │  optional: sidecar IPC at /tmp/open-design/ipc/<ns>/<app>.sock
+   │  optional: sidecar control endpoint at tcp://127.0.0.1:<port>
    │  (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN)
    └─────────┬────────────────────────┘
              │ spawn(cli, [...], { cwd: .od/projects/<id> })
@@ -306,7 +306,7 @@ Chaque couche est composable. Chaque couche est un fichier éditable. Lisez [`ap
 | Aperçu | Iframe sandboxée via `srcdoc` + parser `<artifact>` par Skill ([`apps/web/src/artifacts/parser.ts`](apps/web/src/artifacts/parser.ts)) |
 | Export | HTML (assets inline) · PDF (browser print, deck-aware) · PPTX (piloté par agent via Skill) · ZIP (archiver) · Markdown |
 | Lifecycle | `pnpm tools-dev start \| stop \| run \| status \| logs \| inspect \| check`; ports via `--daemon-port` / `--web-port`, namespaces via `--namespace` |
-| Desktop (optionnel) | Shell Electron, découvre l’URL web par sidecar IPC, sans deviner le port ; le même canal `STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN` alimente `tools-dev inspect desktop …` pour l’E2E |
+| Desktop (optionnel) | Shell Electron, découvre l’URL web par sidecar control endpoint, sans deviner le port ; le même canal `STATUS`/`EVAL`/`SCREENSHOT`/`CONSOLE`/`CLICK`/`SHUTDOWN` alimente `tools-dev inspect desktop …` pour l’E2E |
 
 ## Quickstart
 
@@ -595,7 +595,7 @@ La boucle chat / artifact est la plus visible, mais plusieurs capacités moins e
 - **Templates utilisateur.** Une fois un rendu validé, `POST /api/templates` prend un snapshot du HTML + metadata dans la table SQLite `templates`. Le projet suivant peut le choisir depuis une ligne « your templates ».
 - **Persistance des tabs.** Chaque projet mémorise ses fichiers ouverts et son onglet actif dans la table `tabs`.
 - **Artifact lint API.** `POST /api/artifacts/lint` exécute des checks structurels sur un artifact généré et renvoie des findings que l’agent peut relire au tour suivant.
-- **Sidecar protocol + automation desktop.** Les processus daemon, web et desktop portent des stamps typés à cinq champs (`app · mode · namespace · ipc · source`) et exposent un canal JSON-RPC IPC sous `/tmp/open-design/ipc/<namespace>/<app>.sock`.
+- **Sidecar protocol + automation desktop.** Les processus daemon, web et desktop portent des stamps typés à cinq champs (`app · mode · namespace · endpoint · source`) et exposent un endpoint JSON-RPC de contrôle sous `tcp://127.0.0.1:<port>`.
 - **Spawning compatible Windows.** Les adapters qui dépasseraient la limite argv de `CreateProcess` envoient le prompt via stdin ; le daemon retombe sur un fichier prompt temporaire si besoin.
 - **Runtime data par namespace.** `OD_DATA_DIR` et `--namespace` donnent des arbres `.od/` isolés, pour que Playwright, les canaux beta et vos vrais projets ne partagent jamais le même SQLite.
 

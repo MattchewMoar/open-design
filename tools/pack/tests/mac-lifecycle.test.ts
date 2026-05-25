@@ -9,9 +9,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ToolPackConfig } from "../src/config.js";
 import { resolveMacPaths } from "../src/mac/paths.js";
 
-const requestJsonIpc = vi.fn(async () => ({ state: "running" }));
-const resolveAppIpcPath = vi.fn(() => "/tmp/open-design/ipc/test/desktop.sock");
-const createSidecarLaunchEnv = vi.fn(({ extraEnv }: { extraEnv: NodeJS.ProcessEnv }) => extraEnv);
+const requestJsonControl = vi.fn(async () => ({ state: "running" }));
+const createSidecarLaunchEnv = vi.fn(({ extraEnv }: { base: string; extraEnv: NodeJS.ProcessEnv }) => extraEnv);
+const endpoint = "tcp://127.0.0.1:17401";
 const spawnLoggedProcess = vi.fn(async ({ env }: { env: NodeJS.ProcessEnv }) => {
   return Object.assign(new EventEmitter(), {
     env,
@@ -21,9 +21,12 @@ const spawnLoggedProcess = vi.fn(async ({ env }: { env: NodeJS.ProcessEnv }) => 
 });
 
 vi.mock("@open-design/sidecar", () => ({
+  allocatePort: vi.fn(async () => ({ port: 17401, source: "dynamic" })),
+  createControlEndpoint: vi.fn(() => endpoint),
   createSidecarLaunchEnv,
-  requestJsonIpc,
-  resolveAppIpcPath,
+  readAppControlEndpoint: vi.fn(async () => endpoint),
+  requestJsonControl,
+  writeAppControlEndpoint: vi.fn(async () => undefined),
 }));
 
 vi.mock("@open-design/platform", () => ({
@@ -78,7 +81,7 @@ function makeConfig(root: string, overrides: Partial<ToolPackConfig> = {}): Tool
 
 afterEach(() => {
   vi.clearAllMocks();
-  requestJsonIpc.mockResolvedValue({ state: "running" });
+  requestJsonControl.mockResolvedValue({ state: "running" });
 });
 
 describe("startPackedMacApp", () => {
@@ -99,6 +102,7 @@ describe("startPackedMacApp", () => {
 
       expect(result.source).toBe("installed");
       expect(result.status?.state).toBe("running");
+      expect(createSidecarLaunchEnv.mock.calls[0]?.[0]?.base).toBe(config.roots.runtime.namespaceBaseRoot);
       expect(launchEnv?.OD_PACKAGED_CONFIG_PATH).toBe(launchConfigPath);
       await expect(readFile(launchConfigPath, "utf8")).resolves.toContain(
         `"namespaceBaseRoot": ${JSON.stringify(config.roots.runtime.namespaceBaseRoot)}`,

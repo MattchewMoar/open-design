@@ -9,6 +9,7 @@ import {
   SIDECAR_MODES,
   SIDECAR_SOURCES,
 } from '@open-design/sidecar-proto';
+import { allocatePort, createControlEndpoint } from '@open-design/sidecar';
 
 const stopRuntime = vi.fn(async () => undefined);
 const startDaemonRuntime = vi.fn(async () => ({
@@ -36,10 +37,11 @@ describe('daemon sidecar startup', () => {
     const { setDesktopAuthSecret } = await import('../src/desktop-auth.js');
     const { startDaemonSidecar } = await import('../src/sidecar/server.js');
     const root = await mkdtemp(join(tmpdir(), 'od-daemon-sidecar-'));
+    const endpoint = createControlEndpoint((await allocatePort({ label: 'daemon-sidecar-test' })).port);
     const handle = await startDaemonSidecar({
       app: APP_KEYS.DAEMON,
       base: root,
-      ipc: join(root, 'daemon.sock'),
+      endpoint,
       mode: SIDECAR_MODES.DEV,
       namespace: 'test',
       source: SIDECAR_SOURCES.TOOLS_DEV,

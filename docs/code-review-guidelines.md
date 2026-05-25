@@ -97,7 +97,7 @@ A PR is in scope when it passes the [Product relevance test](#1-product-relevanc
 - `apps/web` — Next.js App Router UI, browser runtime behavior, web-local provider integration.
 - `apps/landing-page` — first-party marketing site workspace package with its own documented boundaries and commands.
 - `apps/daemon` — local privileged daemon APIs, SSE, agent spawning, SQLite persistence, skills/design-system/resource serving, artifacts, credentials storage, static serving, daemon CLI.
-- `apps/desktop` — Electron shell that discovers runtime state through sidecar IPC.
+- `apps/desktop` — Electron shell that discovers runtime state through the sidecar control endpoint.
 - `apps/packaged` — packaged Electron entry, packaged sidecar startup, runtime integration, `od://` entry glue.
 - `packages/contracts` — pure TypeScript web/daemon DTOs, request/response shapes, SSE event unions, task shapes, errors, example payloads.
 - `packages/sidecar-proto` — Open Design sidecar business protocol; app/mode/source constants, namespace validation, stamp fields/flags, IPC message schema, status shapes, error semantics.
@@ -158,7 +158,7 @@ For any change to `packages/contracts`, `packages/sidecar-proto`, persisted SQLi
 - The contract/protocol/schema change lands **before** consumers wire against it (or in the same PR with both sides updated).
 - Changes are backwards-compatible, OR there is an explicit migration plan: schema migration script, backfill strategy, or one-release window of compatible reads.
 - `packages/contracts` stays free of Next.js, Express, Node filesystem/process APIs, browser APIs, SQLite, daemon internals, and sidecar control-plane dependencies.
-- Sidecar process stamps still have exactly five fields: `app`, `mode`, `namespace`, `ipc`, `source`.
+- Sidecar process stamps still have exactly five fields: `app`, `mode`, `namespace`, `endpoint`, `source`.
 - Both producers and consumers have type/test coverage of the new shape.
 
 **Block when:**
@@ -255,7 +255,7 @@ Review in this order. Each priority lists the concrete checks for it.
 
 - No committed secrets, API keys, or `media-config.json` content. No widening of credential storage scope without explicit need.
 - Logs do not leak credentials, tokens, or full prompt payloads.
-- Runtime files stay under the documented paths: `<project-root>/.tmp/<source>/<namespace>/...` and POSIX IPC sockets under `/tmp/open-design/ipc/<namespace>/<app>.sock`.
+- Runtime files stay under the documented paths: `<project-root>/.tmp/<source>/<namespace>/...`; sidecar control endpoints remain TCP loopback values recorded in the namespace endpoint registry.
 - For daemon, desktop, sidecar, path, log, or namespace changes, validate runtime isolation per `AGENTS.md` (concurrent namespaces, log paths under `.tmp/tools-dev/<namespace>/...`, `inspect eval` and `inspect screenshot` per namespace).
 
 ### 5.5 Performance and operational risk

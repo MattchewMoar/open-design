@@ -1,10 +1,10 @@
-import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createConnection, createServer as createNetServer, type Server } from "node:net";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export type SidecarStampShape = {
   app: string;
-  ipc: string;
+  endpoint: string;
   mode: string;
   namespace: string;
   source: string;
@@ -13,15 +13,12 @@ export type SidecarStampShape = {
 export type SidecarContractDescriptor<TStamp extends SidecarStampShape = SidecarStampShape> = {
   defaults: {
     host: string;
-    ipcBase: string;
     namespace: string;
     projectTmpDirName: string;
-    windowsPipePrefix: string;
   };
   env: {
     base: string;
-    ipcBase: string;
-    ipcPath: string;
+    endpoint: string;
     namespace: string;
     source: string;
   };
@@ -61,11 +58,8 @@ export type RuntimeRootRequest<TStamp extends SidecarStampShape = SidecarStampSh
   runId: string;
 };
 
-export type AppIpcPathRequest<TStamp extends SidecarStampShape = SidecarStampShape> = {
-  app: TStamp["app"] | string;
-  contract: SidecarContractDescriptor<TStamp>;
-  env?: NodeJS.ProcessEnv;
-  namespace: string;
+export type SidecarEndpointRegistryRequest = {
+  namespaceRoot: string;
 };
 
 export type AppRuntimePathRequest<TStamp extends SidecarStampShape = SidecarStampShape> = {
@@ -77,7 +71,7 @@ export type AppRuntimePathRequest<TStamp extends SidecarStampShape = SidecarStam
 export type SidecarRuntimeContext<TStamp extends SidecarStampShape = SidecarStampShape> = {
   app: TStamp["app"];
   base: string;
-  ipc: string;
+  endpoint: string;
   mode: TStamp["mode"];
   namespace: string;
   source: TStamp["source"];
@@ -109,24 +103,56 @@ export type PortRequest = {
   reserved?: Set<number>;
 };
 
-export type JsonIpcHandler = (message: any) => unknown | Promise<unknown>;
+export type JsonControlHandler = (message: any) => unknown | Promise<unknown>;
 
-export type JsonIpcServerHandle = {
+export type JsonControlServerHandle = {
   close(): Promise<void>;
 };
 
-export function isWindowsNamedPipePath(value: unknown): boolean {
-  return typeof value === "string" && value.startsWith("\\\\.\\pipe\\");
+export type ControlEndpointParts = {
+  host: string;
+  port: number;
+};
+
+export type SidecarEndpointRegistry<TApp extends string = string> = Partial<Record<TApp, string>>;
+
+export function createControlEndpoint(port: number, host = "127.0.0.1"): string {
+  if (host !== "127.0.0.1") throw new Error(`sidecar endpoint host must be 127.0.0.1: ${host}`);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`sidecar endpoint port must be between 1 and 65535: ${String(port)}`);
+  }
+  return `tcp://${host}:${port}`;
 }
 
-export function normalizeIpcPath(ipc: unknown): string {
-  if (typeof ipc !== "string") throw new Error("sidecar ipc path must be a string");
-  if (ipc.length === 0) throw new Error("sidecar ipc path must not be empty");
-  if (ipc.trim() !== ipc) throw new Error("sidecar ipc path must not contain leading or trailing whitespace");
-  if (ipc.includes("\0")) throw new Error("sidecar ipc path must not contain null bytes");
-  if (isWindowsNamedPipePath(ipc)) return ipc;
-  if (!isAbsolute(ipc)) throw new Error(`sidecar ipc path must be absolute: ${ipc}`);
-  return ipc;
+export function parseControlEndpoint(endpoint: unknown): ControlEndpointParts {
+  if (typeof endpoint !== "string") throw new Error("sidecar endpoint must be a string");
+  if (endpoint.length === 0) throw new Error("sidecar endpoint must not be empty");
+  if (endpoint.trim() !== endpoint) throw new Error("sidecar endpoint must not contain leading or trailing whitespace");
+  if (endpoint.includes("\0")) throw new Error("sidecar endpoint must not contain null bytes");
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error(`sidecar endpoint must be tcp://127.0.0.1:<port>: ${endpoint}`);
+  }
+  if (
+    parsed.protocol !== "tcp:" ||
+    parsed.hostname !== "127.0.0.1" ||
+    parsed.port.length === 0 ||
+    parsed.username.length > 0 ||
+    parsed.password.length > 0 ||
+    (parsed.pathname !== "" && parsed.pathname !== "/") ||
+    parsed.search.length > 0 ||
+    parsed.hash.length > 0
+  ) {
+    throw new Error(`sidecar endpoint must be tcp://127.0.0.1:<port>: ${endpoint}`);
+  }
+  return { host: parsed.hostname, port: Number(parsed.port) };
+}
+
+export function normalizeControlEndpoint(endpoint: unknown): string {
+  const parsed = parseControlEndpoint(endpoint);
+  return createControlEndpoint(parsed.port, parsed.host);
 }
 
 export function resolveNamespace<TStamp extends SidecarStampShape>(options: NamespaceResolutionOptions<TStamp>): string {
@@ -243,21 +269,52 @@ export function resolveAppRuntimePath<TStamp extends SidecarStampShape>({
   return join(resolveAppRuntimeDir({ app, contract, namespaceRoot }), fileName);
 }
 
-export function resolveAppIpcPath<TStamp extends SidecarStampShape>({
+export function resolveControlEndpointRegistryPath({ namespaceRoot }: SidecarEndpointRegistryRequest): string {
+  return join(namespaceRoot, "endpoints.json");
+}
+
+export async function readControlEndpointRegistry<TApp extends string = string>(
+  namespaceRoot: string,
+): Promise<SidecarEndpointRegistry<TApp>> {
+  const payload = await readJsonFile<Record<string, unknown>>(resolveControlEndpointRegistryPath({ namespaceRoot }));
+  if (payload == null || typeof payload !== "object" || Array.isArray(payload)) return {};
+  const entries = Object.entries(payload)
+    .filter((entry): entry is [TApp, string] => typeof entry[1] === "string")
+    .map(([app, endpoint]) => [app as TApp, normalizeControlEndpoint(endpoint)] as const);
+  return Object.fromEntries(entries) as SidecarEndpointRegistry<TApp>;
+}
+
+export async function readAppControlEndpoint<TStamp extends SidecarStampShape>({
   app,
   contract,
-  env = process.env,
-  namespace,
-}: AppIpcPathRequest<TStamp>): string {
+  namespaceRoot,
+}: {
+  app: TStamp["app"] | string;
+  contract: SidecarContractDescriptor<TStamp>;
+  namespaceRoot: string;
+}): Promise<string | null> {
   const normalizedApp = contract.normalizeApp(app);
-  const normalizedNamespace = contract.normalizeNamespace(namespace);
+  const registry = await readControlEndpointRegistry<TStamp["app"]>(namespaceRoot);
+  return registry[normalizedApp] ?? null;
+}
 
-  if (process.platform === "win32") {
-    return `\\\\.\\pipe\\${contract.defaults.windowsPipePrefix}-${normalizedNamespace}-${normalizedApp}`;
-  }
-
-  const ipcBase = resolve(env[contract.env.ipcBase] ?? contract.defaults.ipcBase);
-  return join(ipcBase, normalizedNamespace, `${normalizedApp}.sock`);
+export async function writeAppControlEndpoint<TStamp extends SidecarStampShape>({
+  app,
+  contract,
+  endpoint,
+  namespaceRoot,
+}: {
+  app: TStamp["app"] | string;
+  contract: SidecarContractDescriptor<TStamp>;
+  endpoint: string;
+  namespaceRoot: string;
+}): Promise<void> {
+  const normalizedApp = contract.normalizeApp(app);
+  const registry = await readControlEndpointRegistry<TStamp["app"]>(namespaceRoot);
+  await writeJsonFile(resolveControlEndpointRegistryPath({ namespaceRoot }), {
+    ...registry,
+    [normalizedApp]: normalizeControlEndpoint(endpoint),
+  });
 }
 
 export function createSidecarLaunchEnv<TStamp extends SidecarStampShape>({
@@ -270,7 +327,7 @@ export function createSidecarLaunchEnv<TStamp extends SidecarStampShape>({
   return {
     ...extraEnv,
     [contract.env.base]: resolveSidecarBase({ base, contract, env: extraEnv, source: normalizedStamp.source }),
-    [contract.env.ipcPath]: normalizedStamp.ipc,
+    [contract.env.endpoint]: normalizedStamp.endpoint,
     [contract.env.namespace]: normalizedStamp.namespace,
     [contract.env.source]: normalizedStamp.source,
   };
@@ -301,23 +358,20 @@ export function bootstrapSidecarRuntime<TStamp extends SidecarStampShape>(
     projectRoot: options.projectRoot,
     source: stamp.source,
   });
-  const ipc = resolveAppIpcPath({ app: stamp.app, contract: options.contract, env, namespace: stamp.namespace });
-  if (stamp.ipc !== ipc) {
-    throw new Error(`sidecar ipc path mismatch: expected ${ipc}, received ${stamp.ipc}`);
-  }
+  const endpoint = normalizeControlEndpoint(stamp.endpoint);
 
-  assertMatchingEnv(env, options.contract.env.ipcPath, stamp.ipc);
+  assertMatchingEnv(env, options.contract.env.endpoint, endpoint);
   assertMatchingEnv(env, options.contract.env.namespace, stamp.namespace);
   assertMatchingEnv(env, options.contract.env.source, stamp.source);
 
-  env[options.contract.env.ipcPath] = ipc;
+  env[options.contract.env.endpoint] = endpoint;
   env[options.contract.env.namespace] = stamp.namespace;
   env[options.contract.env.source] = stamp.source;
 
   return {
     app: stamp.app,
     base,
-    ipc,
+    endpoint,
     mode: stamp.mode,
     namespace: stamp.namespace,
     source: stamp.source,
@@ -362,7 +416,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function jsonIpcError(error: unknown): { code?: string; message: string } {
+function jsonControlError(error: unknown): { code?: string; message: string } {
   return {
     ...(errorCode(error) == null ? {} : { code: errorCode(error) as string }),
     message: errorMessage(error),
@@ -437,52 +491,14 @@ export async function removePointerIfCurrent(pointerPath: string, runId: string)
   if (pointer?.runId === runId) await removeFile(pointerPath);
 }
 
-async function staleUnixSocketExists(socketPath: string): Promise<boolean> {
-  try {
-    const stat = await lstat(socketPath);
-    if (!stat.isSocket()) return false;
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return false;
-    throw error;
-  }
-
-  return await new Promise<boolean>((resolveStale, rejectStale) => {
-    const socket = createConnection(socketPath);
-    let settled = false;
-    const settle = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      socket.removeAllListeners();
-      socket.destroy();
-      callback();
-    };
-
-    socket.once("connect", () => settle(() => resolveStale(false)));
-    socket.once("error", (error) => {
-      const code = errorCode(error);
-      if (code === "ENOENT" || code === "ECONNREFUSED") {
-        settle(() => resolveStale(true));
-        return;
-      }
-      settle(() => rejectStale(error));
-    });
-  });
-}
-
-async function prepareIpcPath(socketPath: string): Promise<void> {
-  if (isWindowsNamedPipePath(socketPath)) return;
-  await mkdir(dirname(socketPath), { recursive: true });
-  if (await staleUnixSocketExists(socketPath)) await rm(socketPath, { force: true });
-}
-
-export async function createJsonIpcServer({
+export async function createJsonControlServer({
+  endpoint,
   handler,
-  socketPath,
 }: {
-  handler: JsonIpcHandler;
-  socketPath: string;
-}): Promise<JsonIpcServerHandle> {
-  await prepareIpcPath(socketPath);
+  endpoint: string;
+  handler: JsonControlHandler;
+}): Promise<JsonControlServerHandle> {
+  const { host, port } = parseControlEndpoint(endpoint);
   const server = createNetServer((socket) => {
     let buffer = "";
     socket.on("error", () => {});
@@ -499,7 +515,7 @@ export async function createJsonIpcServer({
         socket.end(
           `${JSON.stringify({
             ok: false,
-            error: jsonIpcError(error),
+            error: jsonControlError(error),
           })}\n`,
         );
       }
@@ -508,7 +524,7 @@ export async function createJsonIpcServer({
 
   await new Promise<void>((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
-    server.listen(socketPath, () => {
+    server.listen({ host, port, exclusive: true }, () => {
       server.off("error", rejectListen);
       resolveListen();
     });
@@ -517,18 +533,18 @@ export async function createJsonIpcServer({
   return {
     async close() {
       await closeServer(server);
-      if (!isWindowsNamedPipePath(socketPath)) await rm(socketPath, { force: true });
     },
   };
 }
 
-export async function requestJsonIpc<T = any>(
-  socketPath: string,
+export async function requestJsonControl<T = any>(
+  endpoint: string,
   payload: unknown,
   { timeoutMs = 1500 }: { timeoutMs?: number } = {},
 ): Promise<T> {
+  const { host, port } = parseControlEndpoint(endpoint);
   return await new Promise<T>((resolveRequest, rejectRequest) => {
-    const socket = createConnection(socketPath);
+    const socket = createConnection({ host, port });
     let settled = false;
     let buffer = "";
     const settle = (callback: () => void) => {
@@ -539,7 +555,7 @@ export async function requestJsonIpc<T = any>(
     };
     const timeout = setTimeout(() => {
       socket.destroy();
-      settle(() => rejectRequest(new Error(`IPC request timed out: ${socketPath}`)));
+      settle(() => rejectRequest(new Error(`sidecar control request timed out: ${endpoint}`)));
     }, timeoutMs);
 
     socket.on("connect", () => {
@@ -553,7 +569,7 @@ export async function requestJsonIpc<T = any>(
       settle(() => {
         const response = JSON.parse(buffer.slice(0, newlineIndex)) as { error?: { message?: string }; ok: boolean; result?: T };
         if (!response.ok) {
-          rejectRequest(new Error(response.error?.message ?? "IPC request failed"));
+          rejectRequest(new Error(response.error?.message ?? "sidecar control request failed"));
           return;
         }
         resolveRequest(response.result as T);

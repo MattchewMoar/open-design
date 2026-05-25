@@ -16,9 +16,11 @@ import {
   type WebStatusSnapshot,
 } from "@open-design/sidecar-proto";
 import {
+  allocatePort,
+  createControlEndpoint,
   createSidecarLaunchEnv,
-  requestJsonIpc,
-  resolveAppIpcPath,
+  requestJsonControl,
+  writeAppControlEndpoint,
   type SidecarRuntimeContext,
 } from "@open-design/sidecar";
 import {
@@ -67,7 +69,7 @@ export type PackagedSidecarHandle = {
 type ManagedSidecarChild = {
   app: AppKey;
   child: ChildProcess;
-  ipcPath: string;
+  endpoint: string;
   logHandle: FileHandle;
 };
 
@@ -123,7 +125,7 @@ export function resolveDaemonStatusTimeoutMs(
 }
 
 /**
- * Waits for the sidecar to report a ready status over IPC.
+ * Waits for the sidecar to report a ready status over its control endpoint.
  *
  * When `watch` is provided, the polling loop also races the spawned
  * child's `exit` event so a daemon that throws at startup (e.g. the
@@ -135,7 +137,7 @@ export function resolveDaemonStatusTimeoutMs(
  * so the user can read the actual failure reason.
  */
 export async function waitForStatus<T>(
-  ipcPath: string,
+  endpoint: string,
   isReady: (status: T) => boolean,
   timeoutMs = DAEMON_STATUS_TIMEOUT_MS,
   watch: { child: { exitCode: number | null; signalCode: NodeJS.Signals | null; once: (event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void) => void; off: (event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void) => void }; logPath: string } | null = null,
@@ -164,8 +166,8 @@ export async function waitForStatus<T>(
         );
       }
       try {
-        const status = await requestJsonIpc<T>(
-          ipcPath,
+        const status = await requestJsonControl<T>(
+          endpoint,
           { type: SIDECAR_MESSAGES.STATUS },
           { timeoutMs: 800 },
         );
@@ -177,7 +179,7 @@ export async function waitForStatus<T>(
     }
 
     throw new Error(
-      `timed out waiting for sidecar status at ${ipcPath}${
+      `timed out waiting for sidecar status at ${endpoint}${
         lastError instanceof Error ? ` (${lastError.message})` : ""
       }`,
     );
@@ -311,21 +313,29 @@ async function spawnSidecarChild(options: {
   paths: PackagedNamespacePaths;
   runtime: SidecarRuntimeContext<SidecarStamp>;
 }): Promise<ManagedSidecarChild> {
-  const ipcPath = resolveAppIpcPath({
-    app: options.app,
-    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-    namespace: options.runtime.namespace,
-  });
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: `${options.app} control`,
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
   const stamp = {
     app: options.app,
-    ipc: ipcPath,
+    endpoint,
     mode: SIDECAR_MODES.RUNTIME,
     namespace: options.runtime.namespace,
     source: options.runtime.source,
   } satisfies SidecarStamp;
+  await writeAppControlEndpoint({
+    app: options.app,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint,
+    namespaceRoot: options.paths.namespaceRoot,
+  });
   const logHandle = await openLog(logPathFor(options.paths, options.app));
   const childEnv = createSidecarLaunchEnv({
-    base: options.paths.runtimeRoot,
+    base: dirname(options.paths.namespaceRoot),
     contract: OPEN_DESIGN_SIDECAR_CONTRACT,
     extraEnv: {
       ...resolvePackagedChildBaseEnv(process.env, options.app === APP_KEYS.DAEMON),
@@ -353,12 +363,12 @@ async function spawnSidecarChild(options: {
     child.once("spawn", resolveSpawn);
   });
 
-  return { app: options.app, child, ipcPath, logHandle };
+  return { app: options.app, child, endpoint, logHandle };
 }
 
 async function closeManagedChild(child: ManagedSidecarChild): Promise<void> {
   try {
-    await requestJsonIpc(child.ipcPath, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1200 });
+    await requestJsonControl(child.endpoint, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1200 });
   } catch {
     // Fall through to process cleanup.
   }
@@ -427,10 +437,10 @@ export async function startPackagedSidecars(
     });
     children.push(daemon);
     const daemonStatus = await waitForStatus<DaemonStatusSnapshot>(
-      daemon.ipcPath,
+      daemon.endpoint,
       (status) => status.url != null,
       resolveDaemonStatusTimeoutMs(),
-      // Race the IPC polling against the daemon child's exit. Without
+      // Race the status polling against the daemon child's exit. Without
       // this, a daemon that throws at startup (LegacyMigrationError on
       // invalid OD_LEGACY_DATA_DIR, existing target payload, symlink,
       // marker write failure) leaves the packaged app waiting the full
@@ -455,7 +465,7 @@ export async function startPackagedSidecars(
     });
     children.push(web);
     const webStatus = await waitForStatus<WebStatusSnapshot>(
-      web.ipcPath,
+      web.endpoint,
       (status) => status.url != null,
     );
     if (webStatus.url == null) throw new Error("web did not report a URL");

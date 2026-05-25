@@ -22,8 +22,8 @@ import {
   type WebStatusSnapshot,
 } from "@open-design/sidecar-proto";
 import {
-  createJsonIpcServer,
-  type JsonIpcServerHandle,
+  createJsonControlServer,
+  type JsonControlServerHandle,
   type SidecarRuntimeContext,
 } from "@open-design/sidecar";
 
@@ -660,7 +660,7 @@ async function createWebSidecarHandle(
     updatedAt: new Date().toISOString(),
     url: `http://${HOST}:${port}`,
   };
-  let ipcServer: JsonIpcServerHandle | null = null;
+  let controlServer: JsonControlServerHandle | null = null;
   let stopped = false;
   let resolveStopped!: () => void;
   const stoppedPromise = new Promise<void>((resolveStop) => {
@@ -679,7 +679,7 @@ async function createWebSidecarHandle(
     stopped = true;
     state.state = "stopped";
     state.updatedAt = new Date().toISOString();
-    await settleShutdownTask(ipcServer?.close());
+    await settleShutdownTask(controlServer?.close());
     await settleShutdownTask(closeServer(httpServer));
     await settleShutdownTask(Promise.resolve().then(closeRuntime));
     resolveStopped();
@@ -687,8 +687,8 @@ async function createWebSidecarHandle(
 
   attachParentMonitor(stop);
 
-  ipcServer = await createJsonIpcServer({
-    socketPath: runtime.ipc,
+  controlServer = await createJsonControlServer({
+    endpoint: runtime.endpoint,
     handler: async (message: unknown) => {
       const request = normalizeWebSidecarMessage(message);
       switch (request.type) {

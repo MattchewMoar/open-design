@@ -235,7 +235,7 @@ describe('createFatalUnhandledRejectionHandler (issue #647 review follow-up)', (
         return 0 as unknown as NodeJS.Immediate;
       }) as typeof setImmediate);
 
-    const realBug = new Error('failed ipc registration');
+    const realBug = new Error('failed control registration');
     handler(realBug);
 
     expect(logger.error).toHaveBeenCalledTimes(1);

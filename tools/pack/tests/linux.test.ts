@@ -5,10 +5,9 @@ import { dirname, join } from "node:path";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { requestJsonIpc, resolveAppIpcPath } from "@open-design/sidecar";
+import { requestJsonControl } from "@open-design/sidecar";
 import {
   APP_KEYS,
-  OPEN_DESIGN_SIDECAR_CONTRACT,
   SIDECAR_MODES,
   SIDECAR_SOURCES,
 } from "@open-design/sidecar-proto";
@@ -18,9 +17,10 @@ vi.mock("@open-design/sidecar", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@open-design/sidecar")>();
   return {
     ...actual,
-    requestJsonIpc: vi.fn(async () => {
-      throw new Error("requestJsonIpc should not be called for invalid headless inspect options");
+    requestJsonControl: vi.fn(async () => {
+      throw new Error("requestJsonControl should not be called for invalid headless inspect options");
     }),
+    readAppControlEndpoint: vi.fn(async () => "tcp://127.0.0.1:17401"),
   };
 });
 
@@ -281,11 +281,7 @@ describe("stopPackedLinuxHeadless", () => {
     const markerPath = join(namespaceRoot, "runtime", "desktop-root.json");
     const stamp = {
       app: APP_KEYS.DESKTOP,
-      ipc: resolveAppIpcPath({
-        app: APP_KEYS.DESKTOP,
-        contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-        namespace,
-      }),
+      endpoint: "tcp://127.0.0.1:17401",
       mode: SIDECAR_MODES.RUNTIME,
       namespace,
       source: SIDECAR_SOURCES.PACKAGED,
@@ -342,11 +338,7 @@ describe("stopPackedLinuxHeadless", () => {
     const markerPath = join(namespaceRoot, "runtime", "desktop-root.json");
     const stamp = {
       app: APP_KEYS.DESKTOP,
-      ipc: resolveAppIpcPath({
-        app: APP_KEYS.DESKTOP,
-        contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-        namespace,
-      }),
+      endpoint: "tcp://127.0.0.1:17402",
       mode: SIDECAR_MODES.RUNTIME,
       namespace,
       source: SIDECAR_SOURCES.PACKAGED,
@@ -407,11 +399,7 @@ describe("stopPackedLinuxHeadless", () => {
     const markerPath = join(namespaceRoot, "runtime", "desktop-root.json");
     const stamp = {
       app: APP_KEYS.DESKTOP,
-      ipc: resolveAppIpcPath({
-        app: APP_KEYS.DESKTOP,
-        contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-        namespace,
-      }),
+      endpoint: "tcp://127.0.0.1:17403",
       mode: SIDECAR_MODES.RUNTIME,
       namespace,
       source: SIDECAR_SOURCES.PACKAGED,
@@ -602,9 +590,9 @@ describe("shouldRejectLinuxHeadlessInspectOptions", () => {
 });
 
 describe("inspectPackedLinuxApp", () => {
-  it("rejects unsupported headless inspect options before opening IPC", async () => {
-    const requestJsonIpcMock = vi.mocked(requestJsonIpc);
-    requestJsonIpcMock.mockClear();
+  it("rejects unsupported headless inspect options before opening the control endpoint", async () => {
+    const requestJsonControlMock = vi.mocked(requestJsonControl);
+    requestJsonControlMock.mockClear();
 
     await expect(
       inspectPackedLinuxApp(makeConfig(), {
@@ -612,13 +600,13 @@ describe("inspectPackedLinuxApp", () => {
         headless: true,
       }),
     ).rejects.toThrow("linux inspect --headless supports status only; omit --expr and --path");
-    expect(requestJsonIpcMock).not.toHaveBeenCalled();
+    expect(requestJsonControlMock).not.toHaveBeenCalled();
   });
 
   it("allows desktop inspect eval and screenshot options when headless is omitted", async () => {
-    const requestJsonIpcMock = vi.mocked(requestJsonIpc);
-    requestJsonIpcMock.mockReset();
-    requestJsonIpcMock
+    const requestJsonControlMock = vi.mocked(requestJsonControl);
+    requestJsonControlMock.mockReset();
+    requestJsonControlMock
       .mockResolvedValueOnce({ state: "running", url: "od://app/" })
       .mockResolvedValueOnce({ ok: true, value: "Open Design" })
       .mockResolvedValueOnce({ path: "/tmp/open-design-linux.png" });
@@ -633,7 +621,7 @@ describe("inspectPackedLinuxApp", () => {
       screenshot: { path: "/tmp/open-design-linux.png" },
       status: { state: "running", url: "od://app/" },
     });
-    expect(requestJsonIpcMock).toHaveBeenCalledTimes(3);
+    expect(requestJsonControlMock).toHaveBeenCalledTimes(3);
   });
 });
 

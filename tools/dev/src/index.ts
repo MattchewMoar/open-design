@@ -19,7 +19,13 @@ import {
   type DesktopUpdateResult,
   type WebStatusSnapshot,
 } from "@open-design/sidecar-proto";
-import { createSidecarLaunchEnv, requestJsonIpc } from "@open-design/sidecar";
+import {
+  allocatePort,
+  createControlEndpoint,
+  createSidecarLaunchEnv,
+  requestJsonControl,
+  writeAppControlEndpoint,
+} from "@open-design/sidecar";
 import {
   collectProcessTreePids,
   createPackageManagerInvocation,
@@ -59,6 +65,9 @@ import {
   inspectDaemonRuntime,
   inspectDesktopRuntime,
   inspectWebRuntime,
+  resolveDaemonEndpoint,
+  resolveDesktopEndpoint,
+  resolveWebEndpoint,
   waitForDaemonRuntime,
   waitForDesktopRuntime,
   waitForWebRuntime,
@@ -334,15 +343,27 @@ async function runLoggedCommand(request: {
   });
 }
 
-function createAppStamp(config: ToolDevConfig, appName: ToolDevAppName) {
-  const currentAppConfig = appConfig(config, appName);
+async function createAppStamp(config: ToolDevConfig, appName: ToolDevAppName) {
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: `${appName} control`,
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
   const stamp = {
     app: appName,
-    ipc: currentAppConfig.ipcPath,
+    endpoint,
     mode: "dev" as const,
     namespace: config.namespace,
     source: SIDECAR_SOURCES.TOOLS_DEV,
   };
+  await writeAppControlEndpoint({
+    app: appName,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint,
+    namespaceRoot: config.namespaceRoot,
+  });
 
   return {
     args: createProcessStampArgs(stamp, OPEN_DESIGN_SIDECAR_CONTRACT),
@@ -385,7 +406,7 @@ async function waitForAppProcessExit(config: ToolDevConfig, appName: ToolDevAppN
 async function assertNoStaleActiveProcess(config: ToolDevConfig, appName: ToolDevAppName): Promise<void> {
   const active = await findAppProcessTree(config, appName);
   if (active.pids.length > 0) {
-    throw new Error(`${appName} has active stamped processes but no reachable IPC status; run tools-dev stop ${appName} first`);
+    throw new Error(`${appName} has active stamped processes but no reachable control endpoint; run tools-dev stop ${appName} first`);
   }
 }
 
@@ -395,7 +416,7 @@ async function spawnSidecarRuntime(request: {
   env: NodeJS.ProcessEnv;
   logHandle: FileHandle;
 }): Promise<{ pid: number }> {
-  const { args: stampArgs, env } = createAppStamp(request.config, request.appName);
+  const { args: stampArgs, env } = await createAppStamp(request.config, request.appName);
   const sidecarConfig = request.config.apps[request.appName];
   const spawned = await spawnBackgroundProcess({
     args: [request.config.tsxCliPath, sidecarConfig.sidecarEntryPath, ...stampArgs],
@@ -573,7 +594,7 @@ async function writeWebDevTsconfig(config: ToolDevConfig): Promise<void> {
 }
 
 async function spawnDesktopRuntime(config: ToolDevConfig, options: CliOptions): Promise<{ pid: number }> {
-  const { args: stampArgs, env } = createAppStamp(config, APP_KEYS.DESKTOP);
+  const { args: stampArgs, env } = await createAppStamp(config, APP_KEYS.DESKTOP);
   const logHandle = await openAppLog(config, APP_KEYS.DESKTOP);
 
   try {
@@ -786,8 +807,15 @@ async function startApp(
 }
 
 async function requestAppShutdown(config: ToolDevConfig, appName: ToolDevAppName): Promise<boolean> {
+  const lookup = runtimeLookup(config);
+  const endpoint = appName === APP_KEYS.DAEMON
+    ? await resolveDaemonEndpoint(lookup)
+    : appName === APP_KEYS.WEB
+      ? await resolveWebEndpoint(lookup)
+      : await resolveDesktopEndpoint(lookup);
+  if (endpoint == null) return false;
   try {
-    await requestJsonIpc(appConfig(config, appName).ipcPath, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
+    await requestJsonControl(endpoint, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
     return true;
   } catch {
     return false;
@@ -816,7 +844,7 @@ async function stopApp(config: ToolDevConfig, appName: ToolDevAppName) {
       app: appName,
       status: before.pids.length === 0 ? "not-running" : "stopped",
       stop: stoppedByGracefulResult(before.pids),
-      via: gracefulRequested ? "ipc" : "process-scan",
+      via: gracefulRequested ? "endpoint" : "process-scan",
     };
   }
 
@@ -825,7 +853,7 @@ async function stopApp(config: ToolDevConfig, appName: ToolDevAppName) {
     app: appName,
     status: stop.remainingPids.length === 0 ? "stopped" : "partial",
     stop,
-    via: gracefulRequested ? "ipc+fallback" : "fallback",
+    via: gracefulRequested ? "endpoint+fallback" : "fallback",
   };
 }
 
@@ -835,7 +863,7 @@ async function inspectAppStatus(config: ToolDevConfig, appName: ToolDevAppName) 
     if (status != null) return status;
     const active = await findAppProcessTree(config, appName);
     return {
-      // PR #974 round 6: synthetic snapshot when the IPC is unreachable
+      // PR #974 round 6: synthetic snapshot when the control endpoint is unreachable
       // — daemon is starting or idle, so the gate is definitionally not
       // active yet. The desktop-auth-gate helper treats this branch as
       // "no daemon running" via the null check, but the type contract
@@ -965,26 +993,31 @@ function parseTimeoutMs(value: string | undefined): number | undefined {
 async function inspectDesktop(config: ToolDevConfig, target: string | undefined, options: CliOptions) {
   const operation = target ?? "status";
   const timeoutMs = parseTimeoutMs(options.timeout) ?? 30000;
+  const endpoint = async (): Promise<string> => {
+    const value = await resolveDesktopEndpoint(runtimeLookup(config));
+    if (value == null) throw new Error("desktop control endpoint is not available");
+    return value;
+  };
 
   switch (operation) {
     case "status":
       return (await inspectDesktopRuntime(runtimeLookup(config), 1000)) ?? ({ state: "idle" } satisfies DesktopStatusSnapshot);
     case "eval":
       if (options.expr == null) throw new Error("--expr is required for desktop eval");
-      return await requestJsonIpc<DesktopEvalResult>(
-        config.apps.desktop.ipcPath,
+      return await requestJsonControl<DesktopEvalResult>(
+        await endpoint(),
         { input: { expression: options.expr }, type: SIDECAR_MESSAGES.EVAL },
         { timeoutMs },
       );
     case "screenshot":
       if (options.path == null) throw new Error("--path is required for desktop screenshot");
-      return await requestJsonIpc<DesktopScreenshotResult>(
-        config.apps.desktop.ipcPath,
+      return await requestJsonControl<DesktopScreenshotResult>(
+        await endpoint(),
         { input: { path: options.path }, type: SIDECAR_MESSAGES.SCREENSHOT },
         { timeoutMs },
       );
     case "console":
-      return await requestJsonIpc<DesktopConsoleResult>(config.apps.desktop.ipcPath, { type: SIDECAR_MESSAGES.CONSOLE }, { timeoutMs });
+      return await requestJsonControl<DesktopConsoleResult>(await endpoint(), { type: SIDECAR_MESSAGES.CONSOLE }, { timeoutMs });
     case "update":
       if (
         options.updateAction != null &&
@@ -992,15 +1025,15 @@ async function inspectDesktop(config: ToolDevConfig, target: string | undefined,
       ) {
         throw new Error("--update-action must be status, check, download, or install");
       }
-      return await requestJsonIpc<DesktopUpdateResult>(
-        config.apps.desktop.ipcPath,
+      return await requestJsonControl<DesktopUpdateResult>(
+        await endpoint(),
         { input: { action: options.updateAction ?? "status" }, type: SIDECAR_MESSAGES.UPDATE },
         { timeoutMs },
       );
     case "click":
       if (options.selector == null) throw new Error("--selector is required for desktop click");
-      return await requestJsonIpc<DesktopClickResult>(
-        config.apps.desktop.ipcPath,
+      return await requestJsonControl<DesktopClickResult>(
+        await endpoint(),
         { input: { selector: options.selector }, type: SIDECAR_MESSAGES.CLICK },
         { timeoutMs },
       );

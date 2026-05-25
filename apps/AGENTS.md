@@ -6,7 +6,7 @@ Follow the root `AGENTS.md` first. This file only records module-level boundarie
 
 - `apps/web`: Next.js 16 App Router + React 18 web runtime. Entrypoints live in `apps/web/app/`; the main client shell is `apps/web/src/App.tsx`. During local `tools-dev` web runs, `apps/web/next.config.ts` rewrites `/api/*`, `/artifacts/*`, and `/frames/*` to `OD_PORT`.
 - `apps/daemon`: Express + SQLite local daemon and `od` bin. It owns REST/SSE APIs, agent CLI spawning, skills, design systems, artifact persistence, static serving, and local data under `.od/`.
-- `apps/desktop`: Electron shell. Desktop does not guess the web port; it reads runtime status through sidecar IPC and opens the reported web URL.
+- `apps/desktop`: Electron shell. Desktop does not guess the web port; it reads runtime status through the sidecar control endpoint and opens the reported web URL.
 - `apps/packaged`: Thin packaged Electron runtime entry. It starts packaged daemon/web sidecars, registers the `od://` entry protocol, and delegates desktop host behavior to `apps/desktop`.
 
 ## Daemon layout
@@ -33,7 +33,7 @@ Follow the root `AGENTS.md` first. This file only records module-level boundarie
 
 ## Sidecar awareness
 
-- App business layers must not import sidecar packages or branch on `runtime.mode`, `namespace`, `ipc`, or `source`.
+- App business layers must not import sidecar packages or branch on `runtime.mode`, `namespace`, `endpoint`, or `source`.
 - Keep sidecar awareness in `apps/<app>/sidecar` or the desktop sidecar entry wrapper.
 
 ## Packaged runtime

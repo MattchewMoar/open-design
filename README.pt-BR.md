@@ -284,7 +284,7 @@ Toda camada é compositável. Toda camada é um arquivo que dá pra editar. Leia
    │  /api/upload          /api/projects/:id/files…
    │  /artifacts (static)  /frames (static)
    │
-   │  optional: sidecar IPC at /tmp/open-design/ipc/<ns>/<app>.sock
+   │  optional: sidecar control endpoint at tcp://127.0.0.1:<port>
    │  (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN)
    └─────────┬────────────────────────┘
              │ spawn(cli, [...], { cwd: .od/projects/<id> })
@@ -592,7 +592,7 @@ O loop chat / artifact é o destaque, mas algumas capacidades menos visíveis j�
 - **Templates salvos pelo usuário.** Quando você gosta de um render, `POST /api/templates` faz snapshot do HTML + metadados na tabela `templates` do SQLite. O próximo projeto pega ele numa linha "your templates" no picker — mesma superfície dos 31 entregues, mas seu.
 - **Persistência de tabs.** Todo projeto lembra os arquivos abertos e a tab ativa na tabela `tabs`. Reabra o projeto amanhã e o workspace está exatamente como você deixou.
 - **API de lint de artifact.** `POST /api/artifacts/lint` roda checagens estruturais num artifact gerado (framing `<artifact>` quebrado, side files obrigatórios faltando, tokens de paleta velhos) e devolve findings que o agente pode reler na próxima turn. A autocrítica de 5-dim usa isso para ancorar a nota em evidência real, não em vibes.
-- **Protocolo de sidecar + automação desktop.** Daemon, web e desktop carregam stamps tipados de cinco campos (`app · mode · namespace · ipc · source`) e expõem um canal IPC JSON-RPC em `/tmp/open-design/ipc/<namespace>/<app>.sock`. `tools-dev inspect desktop status \| eval \| screenshot` dirige esse canal, então E2E headless funciona contra um shell Electron real sem harnesses customizados ([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
+- **Protocolo de sidecar + automação desktop.** Daemon, web e desktop carregam stamps tipados de cinco campos (`app · mode · namespace · endpoint · source`) e expõem um endpoint de contrôle JSON-RPC em `tcp://127.0.0.1:<port>`. `tools-dev inspect desktop status \| eval \| screenshot` dirige esse canal, então E2E headless funciona contra um shell Electron real sem harnesses customizados ([`packages/sidecar-proto/`](packages/sidecar-proto/), [`apps/desktop/src/main/`](apps/desktop/src/main/)).
 - **Spawn amigável a Windows.** Todo adapter que estouraria o limite de ~32 KB de argv do `CreateProcess` em prompts compostos longos (Codex, Gemini, OpenCode, Cursor Agent, Qwen, Qoder CLI, Pi) entrega o prompt via stdin. Claude Code e Copilot ficam com `-p`; o daemon faz fallback para arquivo temporário de prompt quando até isso transborda.
 - **Dados de runtime por namespace.** `OD_DATA_DIR` e `--namespace` te dão árvores estilo `.od/` totalmente isoladas, então Playwright, canais beta e seus projetos reais nunca compartilham um arquivo SQLite.
 

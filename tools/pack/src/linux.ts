@@ -15,7 +15,14 @@ import {
   type DesktopStatusSnapshot,
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
-import { createSidecarLaunchEnv, requestJsonIpc, resolveAppIpcPath } from "@open-design/sidecar";
+import {
+  allocatePort,
+  createControlEndpoint,
+  createSidecarLaunchEnv,
+  readAppControlEndpoint,
+  requestJsonControl,
+  writeAppControlEndpoint,
+} from "@open-design/sidecar";
 import {
   collectProcessTreePids,
   createPackageManagerInvocation,
@@ -885,16 +892,10 @@ async function validateDesktopAppImageMarker(
   // AppImage/desktop/icon files out from under the still-running app.
   // Accept either TOOLS_PACK (CLI start) or PACKAGED (menu launch). Mirrors
   // the dual-source acceptance pattern in mac/lifecycle.ts.
-  const expectedIpc = resolveAppIpcPath({
-    app: APP_KEYS.DESKTOP,
-    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-    namespace: config.namespace,
-  });
   const stampOk =
     marker.stamp.app === APP_KEYS.DESKTOP &&
     marker.stamp.mode === SIDECAR_MODES.RUNTIME &&
     marker.stamp.namespace === config.namespace &&
-    marker.stamp.ipc === expectedIpc &&
     (marker.stamp.source === SIDECAR_SOURCES.TOOLS_PACK ||
       marker.stamp.source === SIDECAR_SOURCES.PACKAGED);
   const paths = resolveLinuxPaths(config);
@@ -929,18 +930,36 @@ function headlessIdentityPath(config: ToolPackConfig): string {
   return join(config.roots.runtime.namespaceRoot, "runtime", "headless-root.json");
 }
 
-function linuxDesktopStamp(config: ToolPackConfig): SidecarStamp {
-  return {
+async function linuxDesktopStamp(config: ToolPackConfig): Promise<SidecarStamp> {
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: "desktop control",
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
+  const stamp = {
     app: APP_KEYS.DESKTOP,
-    ipc: resolveAppIpcPath({
-      app: APP_KEYS.DESKTOP,
-      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-      namespace: config.namespace,
-    }),
+    endpoint,
     mode: SIDECAR_MODES.RUNTIME,
     namespace: config.namespace,
     source: SIDECAR_SOURCES.TOOLS_PACK,
   };
+  await writeAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint,
+    namespaceRoot: config.roots.runtime.namespaceRoot,
+  });
+  return stamp;
+}
+
+async function linuxDesktopEndpoint(config: ToolPackConfig): Promise<string | null> {
+  return await readAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    namespaceRoot: config.roots.runtime.namespaceRoot,
+  });
 }
 
 async function waitForMarker(markerPath: string, timeoutMs: number): Promise<boolean> {
@@ -954,12 +973,9 @@ async function waitForMarker(markerPath: string, timeoutMs: number): Promise<boo
 
 async function fetchDesktopStatus(config: ToolPackConfig): Promise<DesktopStatusSnapshot | null> {
   try {
-    const ipc = resolveAppIpcPath({
-      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-      namespace: config.namespace,
-      app: APP_KEYS.DESKTOP,
-    });
-    const reply = await requestJsonIpc(ipc, { type: SIDECAR_MESSAGES.STATUS });
+    const endpoint = await linuxDesktopEndpoint(config);
+    if (endpoint == null) return null;
+    const reply = await requestJsonControl(endpoint, { type: SIDECAR_MESSAGES.STATUS });
     if (reply == null || typeof reply !== "object") return null;
     return reply as DesktopStatusSnapshot;
   } catch {
@@ -987,7 +1003,7 @@ export async function startPackedLinuxApp(config: ToolPackConfig): Promise<Linux
   // instantly on the stale file instead of waiting for the new spawn's marker.
   await rm(desktopIdentityPath(config), { force: true }).catch(() => undefined);
 
-  const stamp = linuxDesktopStamp(config);
+  const stamp = await linuxDesktopStamp(config);
 
   // --appimage-extract-and-run bypasses FUSE-mounted SquashFS, which is too slow
   // for daemon startup on first launch (smoke testing showed startup exceeded the
@@ -999,7 +1015,7 @@ export async function startPackedLinuxApp(config: ToolPackConfig): Promise<Linux
     command: appImagePath,
     cwd: dirname(appImagePath),
     env: createSidecarLaunchEnv({
-      base: join(config.roots.runtime.namespaceRoot, "runtime"),
+      base: config.roots.runtime.namespaceBaseRoot,
       contract: OPEN_DESIGN_SIDECAR_CONTRACT,
       extraEnv: { ...process.env, [DESKTOP_LOG_ECHO_ENV]: "0" },
       stamp,
@@ -1091,12 +1107,12 @@ export async function stopPackedLinuxApp(config: ToolPackConfig): Promise<LinuxS
     };
   }
 
-  // Try graceful shutdown via IPC first. mac/lifecycle.ts's pattern: best-effort SHUTDOWN
+  // Try graceful shutdown via the control endpoint first. mac/lifecycle.ts's pattern: best-effort SHUTDOWN
   // request with a short timeout so Electron renderers + sidecars get a chance
   // to flush state (SQLite WAL, logs) before SIGTERM.
   let gracefulRequested = false;
   try {
-    await requestJsonIpc(marker.stamp.ipc, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
+    await requestJsonControl(marker.stamp.endpoint, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
     gracefulRequested = true;
   } catch {
     gracefulRequested = false;
@@ -1143,12 +1159,18 @@ export async function inspectPackedLinuxApp(
     throw new Error("linux inspect --headless supports status only; omit --expr and --path");
   }
 
-  const stamp = linuxDesktopStamp(config);
-  const status = await requestJsonIpc<DesktopStatusSnapshot>(
-    stamp.ipc,
-    { type: SIDECAR_MESSAGES.STATUS },
-    { timeoutMs: 2000 },
-  ).catch(() => null);
+  const endpoint = await linuxDesktopEndpoint(config);
+  const requireEndpoint = (): string => {
+    if (endpoint == null) throw new Error("desktop control endpoint is not available");
+    return endpoint;
+  };
+  const status = endpoint == null
+    ? null
+    : await requestJsonControl<DesktopStatusSnapshot>(
+      endpoint,
+      { type: SIDECAR_MESSAGES.STATUS },
+      { timeoutMs: 2000 },
+    ).catch(() => null);
 
   if (options.headless === true) {
     return { status };
@@ -1158,8 +1180,8 @@ export async function inspectPackedLinuxApp(
     ...(options.expr == null
       ? {}
       : {
-          eval: await requestJsonIpc<DesktopEvalResult>(
-            stamp.ipc,
+          eval: await requestJsonControl<DesktopEvalResult>(
+            requireEndpoint(),
             { input: { expression: options.expr }, type: SIDECAR_MESSAGES.EVAL },
             { timeoutMs: 5000 },
           ),
@@ -1167,8 +1189,8 @@ export async function inspectPackedLinuxApp(
     ...(options.path == null
       ? {}
       : {
-          screenshot: await requestJsonIpc<DesktopScreenshotResult>(
-            stamp.ipc,
+          screenshot: await requestJsonControl<DesktopScreenshotResult>(
+            requireEndpoint(),
             { input: { path: options.path }, type: SIDECAR_MESSAGES.SCREENSHOT },
             { timeoutMs: 10000 },
           ),
@@ -1284,7 +1306,7 @@ export type LinuxCleanupResult = {
   // True when stopPackedLinuxApp returned "partial" or "unmanaged" -- the
   // output and runtime namespace roots may contain files held open by a
   // surviving process tree, so we leave them in place rather than yanking
-  // SQLite WAL files / log handles / IPC sockets out from under it.
+  // SQLite WAL files / log handles out from under it.
   // Both removed* flags will be false in this case.
   skipped: boolean;
   stop: LinuxStopResult;
@@ -1512,16 +1534,10 @@ export async function stopPackedLinuxHeadless(config: ToolPackConfig): Promise<L
   // the same PACKAGED source to desktop-root.json, so the distinct marker path
   // is the ownership boundary that keeps --headless stop/cleanup from claiming
   // the AppImage runtime.
-  const expectedIpc = resolveAppIpcPath({
-    app: APP_KEYS.DESKTOP,
-    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-    namespace: config.namespace,
-  });
   const stampOk =
     marker.stamp.app === APP_KEYS.DESKTOP &&
     marker.stamp.mode === SIDECAR_MODES.RUNTIME &&
     marker.stamp.namespace === config.namespace &&
-    marker.stamp.ipc === expectedIpc &&
     marker.stamp.source === SIDECAR_SOURCES.PACKAGED;
 
   if (!stampOk || marker.namespaceRoot !== config.roots.runtime.namespaceRoot) {
@@ -1542,7 +1558,7 @@ export async function stopPackedLinuxHeadless(config: ToolPackConfig): Promise<L
 
   let gracefulRequested = false;
   try {
-    await requestJsonIpc(marker.stamp.ipc, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
+    await requestJsonControl(marker.stamp.endpoint, { type: SIDECAR_MESSAGES.SHUTDOWN }, { timeoutMs: 1500 });
     gracefulRequested = true;
   } catch {
     gracefulRequested = false;

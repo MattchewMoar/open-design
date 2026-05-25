@@ -13,7 +13,13 @@ import {
   normalizeDesktopSidecarMessage,
   type SidecarStamp,
 } from "@open-design/sidecar-proto";
-import { bootstrapSidecarRuntime, createJsonIpcServer, resolveAppIpcPath } from "@open-design/sidecar";
+import {
+  allocatePort,
+  bootstrapSidecarRuntime,
+  createControlEndpoint,
+  createJsonControlServer,
+  writeAppControlEndpoint,
+} from "@open-design/sidecar";
 
 import { PACKAGED_NAMESPACE_ENV, type PackagedConfig } from "./config.js";
 import { writePackagedDesktopIdentity, writePackagedWebIdentity } from "./identity.js";
@@ -67,14 +73,17 @@ function resolveHeadlessConfig(): PackagedConfig {
   };
 }
 
-function createHeadlessStamp(namespace: string): SidecarStamp {
+async function createHeadlessStamp(namespace: string): Promise<SidecarStamp> {
+  const endpoint = createControlEndpoint(
+    (await allocatePort({
+      host: OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+      label: "desktop control",
+    })).port,
+    OPEN_DESIGN_SIDECAR_CONTRACT.defaults.host,
+  );
   return {
     app: APP_KEYS.DESKTOP,
-    ipc: resolveAppIpcPath({
-      app: APP_KEYS.DESKTOP,
-      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-      namespace,
-    }),
+    endpoint,
     mode: SIDECAR_MODES.RUNTIME,
     namespace,
     source: SIDECAR_SOURCES.PACKAGED,
@@ -89,13 +98,19 @@ function colorize(text: string): string {
 async function main(): Promise<void> {
   const config = resolveHeadlessConfig();
   const paths = resolvePackagedNamespacePaths(config);
-  const stamp = createHeadlessStamp(config.namespace);
+  const stamp = await createHeadlessStamp(config.namespace);
 
   await mkdir(paths.runtimeRoot, { recursive: true });
+  await writeAppControlEndpoint({
+    app: APP_KEYS.DESKTOP,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+    endpoint: stamp.endpoint,
+    namespaceRoot: paths.namespaceRoot,
+  });
 
   const runtime = bootstrapSidecarRuntime(stamp, process.env, {
     app: APP_KEYS.DESKTOP,
-    base: paths.runtimeRoot,
+    base: config.namespaceBaseRoot,
     contract: OPEN_DESIGN_SIDECAR_CONTRACT,
   });
 
@@ -138,14 +153,14 @@ async function main(): Promise<void> {
 
   const shutdown = async (): Promise<void> => {
     process.stdout.write("\n Shutting down Open Design...\n");
-    await ipcServer.close().catch(() => undefined);
+    await controlServer.close().catch(() => undefined);
     await sidecars.close().catch(() => undefined);
     await identity.close().catch(() => undefined);
     process.exit(0);
   };
 
-  const ipcServer = await createJsonIpcServer({
-    socketPath: stamp.ipc,
+  const controlServer = await createJsonControlServer({
+    endpoint: stamp.endpoint,
     handler: async (message: unknown) => {
       const request = normalizeDesktopSidecarMessage(message);
       switch (request.type) {
