@@ -256,6 +256,10 @@ Default precedence is OD_MEDIA_CONFIG_DIR > OD_DATA_DIR > `<projectRoot>/.od`.
 
 Run `pnpm install` after changing package manifests, workspace layout, command entrypoints, bin/link-related content, or after adding/removing workspace packages.
 
+## Why can `pnpm tools-dev` fail after editing `tools/dev` source?
+
+`pnpm tools-dev` intentionally calls `tools/dev/bin/tools-dev.mjs`, which loads `tools/dev/dist/index.mjs`. This keeps the root entry compatible with the future split-out tools model while avoiding an extra Windows package-manager shim. After changing `tools/dev/src` or a package export it consumes, refresh generated entries with `pnpm --filter @open-design/tools-dev build` or rerun `pnpm install`; do not repoint the root script to `tools/dev` source.
+
 ## Can I use Node 22 instead of Node 24?
 
 No. `package.json#engines` specifies `node: "~24"`, which is the only supported runtime. The current lockfile pins `better-sqlite3@11.10.0`; on Windows it has no prebuilt binary for Node 24 and is built from source via node-gyp (see the Windows native section). Older Node versions are not tested and may hit lockfile or dependency incompatibilities.

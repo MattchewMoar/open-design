@@ -429,6 +429,9 @@ async function spawnSidecarRuntime(request: {
       ...request.env,
     },
     logFd: request.logHandle.fd,
+    stderrLogPath: sidecarConfig.latestStderrLogPath,
+    stdoutLogPath: sidecarConfig.latestStdoutLogPath,
+    windowsHiddenLauncher: "powershell",
   });
   return { pid: spawned.pid };
 }
@@ -634,6 +637,9 @@ async function spawnDesktopRuntime(config: ToolDevConfig, options: CliOptions): 
       detached: true,
       env: spawnEnv,
       logFd: logHandle.fd,
+      stderrLogPath: config.apps.desktop.latestStderrLogPath,
+      stdoutLogPath: config.apps.desktop.latestStdoutLogPath,
+      windowsHiddenLauncher: "powershell",
     });
     return { pid: spawned.pid };
   } finally {
@@ -694,7 +700,7 @@ async function startDaemon(
     };
   } catch (error) {
     const logPath = config.apps.daemon.latestLogPath;
-    const lines = await readLogTail(logPath, 80).catch(() => []);
+    const lines = (await readLogs(config, APP_KEYS.DAEMON).catch(() => ({ lines: [] }))).lines.slice(-80);
     await stopApp(config, APP_KEYS.DAEMON).catch(() => undefined);
     throw appendStartupLogDiagnostics(error, APP_KEYS.DAEMON, createStartupLogDiagnostics(logPath, lines));
   }
@@ -723,7 +729,7 @@ async function startWeb(config: ToolDevConfig, options: CliOptions) {
     };
   } catch (error) {
     const logPath = config.apps.web.latestLogPath;
-    const lines = await readLogTail(logPath, 80).catch(() => []);
+    const lines = (await readLogs(config, APP_KEYS.WEB).catch(() => ({ lines: [] }))).lines.slice(-80);
     await stopApp(config, APP_KEYS.WEB).catch(() => undefined);
     throw appendStartupLogDiagnostics(error, APP_KEYS.WEB, createStartupLogDiagnostics(logPath, lines));
   }
@@ -918,8 +924,24 @@ async function restartTargets(config: ToolDevConfig, appName: string | undefined
 }
 
 async function readLogs(config: ToolDevConfig, appName: ToolDevAppName) {
-  const logPath = appConfig(config, appName).latestLogPath;
-  return { app: appName, lines: await readLogTail(logPath, 200), logPath };
+  const app = appConfig(config, appName);
+  const logPath = app.latestLogPath;
+  const lines = (
+    await Promise.all([
+      readLogTail(logPath, 200),
+      readLogTail(app.latestStdoutLogPath, 200),
+      readLogTail(app.latestStderrLogPath, 200),
+    ])
+  ).flat().slice(-200);
+  return {
+    app: appName,
+    lines,
+    logPath,
+    streamLogPaths: {
+      stderr: app.latestStderrLogPath,
+      stdout: app.latestStdoutLogPath,
+    },
+  };
 }
 
 function createLogDiagnostics(logs: Record<string, LogResult>): Record<string, LogDiagnostic[]> {

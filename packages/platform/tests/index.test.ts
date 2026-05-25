@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,10 +10,12 @@ import {
   createCommandInvocation,
   createPackageManagerInvocation,
   createProcessStampArgs,
+  isProcessAlive,
   matchesStampedProcess,
   pathContains,
   readProcessStampFromCommand,
   removePathBestEffort,
+  spawnBackgroundProcess,
   wellKnownUserToolchainBins,
   type ProcessStampContract,
 } from "../src/index.js";
@@ -370,13 +373,63 @@ describe("createPackageManagerInvocation", () => {
     ]);
   });
 
+  it("resolves a Windows pnpm shim to pnpm.cjs when the node entrypoint is beside the shim", () => {
+    setPlatform("win32");
+    const root = mkdtempSync(join(tmpdir(), "platform-pnpm-shim-"));
+    try {
+      const pnpmCmd = join(root, "bin", "pnpm.cmd");
+      const pnpmCjs = join(root, "node_modules", "pnpm", "bin", "pnpm.cjs");
+      mkdirSync(join(root, "bin"), { recursive: true });
+      mkdirSync(join(root, "node_modules", "pnpm", "bin"), { recursive: true });
+      writeFileSync(pnpmCmd, "@echo off\n");
+      writeFileSync(pnpmCjs, "");
+
+      const invocation = createPackageManagerInvocation(["--filter", "@open-design/desktop", "build"], {
+        ComSpec: "cmd.exe",
+        npm_execpath: pnpmCmd,
+      } as NodeJS.ProcessEnv);
+
+      expect(invocation).toEqual({
+        args: [pnpmCjs, "--filter", "@open-design/desktop", "build"],
+        command: process.execPath,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves pnpm.cjs from PATH on Windows before falling back to cmd.exe", () => {
+    setPlatform("win32");
+    const root = mkdtempSync(join(tmpdir(), "platform-pnpm-path-"));
+    try {
+      const pnpmCmd = join(root, "bin", "pnpm.cmd");
+      const pnpmCjs = join(root, "node_modules", "pnpm", "bin", "pnpm.cjs");
+      mkdirSync(join(root, "bin"), { recursive: true });
+      mkdirSync(join(root, "node_modules", "pnpm", "bin"), { recursive: true });
+      writeFileSync(pnpmCmd, "@echo off\n");
+      writeFileSync(pnpmCjs, "");
+
+      const invocation = createPackageManagerInvocation(["--filter", "@open-design/daemon", "build"], {
+        ComSpec: "cmd.exe",
+        Path: join(root, "bin"),
+      } as NodeJS.ProcessEnv);
+
+      expect(invocation).toEqual({
+        args: [pnpmCjs, "--filter", "@open-design/daemon", "build"],
+        command: process.execPath,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("returns plain pnpm invocation on POSIX without npm_execpath", () => {
     setPlatform("linux");
     const invocation = createPackageManagerInvocation(["install"], {} as NodeJS.ProcessEnv);
     expect(invocation).toEqual({ args: ["install"], command: "pnpm" });
   });
 
-  it("wraps pnpm through cmd.exe with verbatim arguments on Windows", () => {
+  it("wraps pnpm through cmd.exe with verbatim arguments on Windows when no node entrypoint can be found", () => {
     setPlatform("win32");
     const invocation = createPackageManagerInvocation(["--filter", "@open-design/desktop", "build"], {
       ComSpec: "cmd.exe",
@@ -390,6 +443,89 @@ describe("createPackageManagerInvocation", () => {
       '"pnpm --filter @open-design/desktop build"',
     ]);
   });
+});
+
+async function waitForFileText(filePath: string, expected: string): Promise<string> {
+  const startedAt = Date.now();
+  let latest = "";
+  while (Date.now() - startedAt < 5000) {
+    try {
+      latest = readFileSync(filePath, "utf8");
+      if (latest.includes(expected)) return latest;
+    } catch {
+      // The hidden Windows launcher may not have created the redirected log yet.
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`timed out waiting for ${expected} in ${filePath}; latest content: ${latest}`);
+}
+
+async function removeTreeWithRetry(root: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    }
+  }
+  throw lastError;
+}
+
+describe("spawnBackgroundProcess", () => {
+  const itWindows = process.platform === "win32" ? it : it.skip;
+
+  itWindows("uses the PowerShell hidden launcher with split stdout and stderr logs", async () => {
+    const root = mkdtempSync(join(tmpdir(), "platform-pwsh-hidden-"));
+    const stdoutLogPath = join(root, "latest.out.log");
+    const stderrLogPath = join(root, "latest.err.log");
+    const originalRemoved = process.env.OD_PWSH_REMOVED;
+    process.env.OD_PWSH_REMOVED = "parent-only";
+
+    let spawned: { pid: number } | null = null;
+    try {
+      const env: NodeJS.ProcessEnv = { ...process.env, OD_PWSH_STDOUT: "stdout-from-env" };
+      delete env.OD_PWSH_REMOVED;
+      spawned = await spawnBackgroundProcess({
+        args: [
+          "-e",
+          [
+            "console.log(process.env.OD_PWSH_STDOUT);",
+            "console.log(process.env.OD_PWSH_REMOVED === undefined ? 'removed-env' : process.env.OD_PWSH_REMOVED);",
+            "console.error('stderr-from-child');",
+            "setInterval(() => undefined, 1000);",
+            "setTimeout(() => process.exit(0), 30000);",
+          ].join(""),
+        ],
+        command: process.execPath,
+        cwd: root,
+        detached: true,
+        env,
+        stderrLogPath,
+        stdoutLogPath,
+        windowsHiddenLauncher: "powershell",
+      });
+
+      expect(spawned.pid).toBeGreaterThan(0);
+      expect(isProcessAlive(spawned.pid)).toBe(true);
+      const stdout = await waitForFileText(stdoutLogPath, "stdout-from-env");
+      expect(stdout).toContain("removed-env");
+      expect(await waitForFileText(stderrLogPath, "stderr-from-child")).toContain("stderr-from-child");
+    } finally {
+      if (spawned != null) {
+        try {
+          execFileSync("taskkill.exe", ["/PID", String(spawned.pid), "/T", "/F"], { stdio: "ignore" });
+        } catch {
+          // Best-effort cleanup; the child also has a short self-termination timer.
+        }
+      }
+      if (originalRemoved == null) delete process.env.OD_PWSH_REMOVED;
+      else process.env.OD_PWSH_REMOVED = originalRemoved;
+      await removeTreeWithRetry(root);
+    }
+  }, 15000);
 });
 
 describe("wellKnownUserToolchainBins", () => {

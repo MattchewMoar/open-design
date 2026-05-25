@@ -1,8 +1,8 @@
 import { execFile, spawn, type ChildProcess, type StdioOptions } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { copyFile, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, delimiter, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 export type CommandInvocation = {
@@ -39,6 +39,9 @@ export type SpawnProcessRequest = CommandInvocationRequest & {
   cwd?: string;
   detached?: boolean;
   logFd?: number | null;
+  stderrLogPath?: string | null;
+  stdoutLogPath?: string | null;
+  windowsHiddenLauncher?: "powershell";
 };
 
 export type ProcessSnapshot = {
@@ -279,6 +282,45 @@ function buildCmdShimInvocation(command: string, args: string[], env: NodeJS.Pro
 
 const nodeLoadablePackageManagerExtensions = new Set([".js", ".cjs", ".mjs"]);
 
+function packageManagerNodeEntrypointCandidates(execPath: string): string[] {
+  const binDir = dirname(execPath);
+  return [
+    execPath,
+    join(binDir, "pnpm.cjs"),
+    join(binDir, "node_modules", "pnpm", "bin", "pnpm.cjs"),
+    join(binDir, "..", "node_modules", "pnpm", "bin", "pnpm.cjs"),
+  ];
+}
+
+function resolveNodeLoadablePackageManagerPath(execPath: string | undefined): string | null {
+  if (execPath == null || execPath.length === 0) return null;
+  if (nodeLoadablePackageManagerExtensions.has(extname(execPath).toLowerCase())) return execPath;
+  for (const candidate of packageManagerNodeEntrypointCandidates(execPath).slice(1)) {
+    if (nodeLoadablePackageManagerExtensions.has(extname(candidate).toLowerCase()) && existsSync(candidate)) {
+      return resolve(candidate);
+    }
+  }
+  return null;
+}
+
+function envPathValue(env: NodeJS.ProcessEnv): string | undefined {
+  return env.PATH ?? env.Path ?? env.path;
+}
+
+function resolvePnpmCjsFromPath(env: NodeJS.ProcessEnv): string | null {
+  const pathValue = envPathValue(env);
+  if (pathValue == null || pathValue.length === 0) return null;
+  const pathSeparator = process.platform === "win32" ? ";" : delimiter;
+  for (const entry of pathValue.split(pathSeparator)) {
+    if (entry.length === 0) continue;
+    for (const name of process.platform === "win32" ? ["pnpm.cmd", "pnpm.CMD", "pnpm.ps1", "pnpm"] : ["pnpm"]) {
+      const resolved = resolveNodeLoadablePackageManagerPath(join(entry, name));
+      if (resolved != null) return resolved;
+    }
+  }
+  return null;
+}
+
 export function createCommandInvocation({ args = [], command, env = process.env }: CommandInvocationRequest): CommandInvocation {
   if (process.platform === "win32" && /\.(bat|cmd)$/i.test(command)) {
     return buildCmdShimInvocation(command, args, env);
@@ -288,10 +330,11 @@ export function createCommandInvocation({ args = [], command, env = process.env 
 
 export function createPackageManagerInvocation(args: string[], env: NodeJS.ProcessEnv = process.env): CommandInvocation {
   const execPath = env.npm_execpath;
+  const nodeEntrypoint = resolveNodeLoadablePackageManagerPath(execPath) ?? (
+    process.platform === "win32" ? resolvePnpmCjsFromPath(env) : null
+  );
+  if (nodeEntrypoint != null) return { args: [nodeEntrypoint, ...args], command: process.execPath };
   if (execPath) {
-    if (nodeLoadablePackageManagerExtensions.has(extname(execPath).toLowerCase())) {
-      return { args: [execPath, ...args], command: process.execPath };
-    }
     return createCommandInvocation({ args, command: execPath, env });
   }
   if (process.platform === "win32") {
@@ -311,7 +354,222 @@ async function waitForChildSpawn(child: ChildProcess): Promise<void> {
   });
 }
 
+function quoteWindowsProcessArgument(value: string): string {
+  if (value.length === 0) return '""';
+  if (!/[\s"]/.test(value)) return value;
+  const quoted = value
+    .replace(/(\\*)"/g, '$1$1\\"')
+    .replace(/(\\+)$/g, "$1$1");
+  return `"${quoted}"`;
+}
+
+function createWindowsProcessArgumentList(args: readonly string[]): string {
+  return args.map(quoteWindowsProcessArgument).join(" ");
+}
+
+function windowsEnvKey(key: string): string {
+  return key.toUpperCase();
+}
+
+function createWindowsEnvironmentOverrides(env: NodeJS.ProcessEnv | undefined): Record<string, string | null> | null {
+  if (env == null) return null;
+
+  const currentKeys = new Map<string, string>();
+  for (const key of Object.keys(process.env)) {
+    currentKeys.set(windowsEnvKey(key), key);
+  }
+
+  const requestedKeys = new Map<string, string>();
+  for (const key of Object.keys(env)) {
+    requestedKeys.set(windowsEnvKey(key), key);
+  }
+
+  const overrides: Record<string, string | null> = {};
+  for (const [normalizedKey, currentKey] of currentKeys) {
+    if (!requestedKeys.has(normalizedKey)) overrides[currentKey] = null;
+  }
+
+  for (const [requestedKey, requestedValue] of Object.entries(env)) {
+    const normalizedKey = windowsEnvKey(requestedKey);
+    const currentKey = currentKeys.get(normalizedKey);
+    const currentValue = currentKey == null ? undefined : process.env[currentKey];
+    if (requestedValue == null) {
+      if (currentKey != null) overrides[currentKey] = null;
+      continue;
+    }
+    if (requestedValue !== currentValue) overrides[requestedKey] = requestedValue;
+  }
+
+  return Object.keys(overrides).length === 0 ? null : overrides;
+}
+
+function encodePowerShellCommand(command: string): string {
+  return Buffer.from(command, "utf16le").toString("base64");
+}
+
+function quotePowerShellString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function createWindowsPowerShellWrapperCommand(payload: {
+  argumentList: string;
+  command: string;
+  cwd?: string;
+  env?: Record<string, string | null> | null;
+  errorPath: string;
+  pidPath: string;
+  stderrLogPath?: string | null;
+  stdoutLogPath?: string | null;
+}): string {
+  const payloadBase64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+  return encodePowerShellCommand(`
+$ErrorActionPreference = 'Stop'
+$payloadJson = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${payloadBase64}'))
+$config = $payloadJson | ConvertFrom-Json
+try {
+  $params = @{
+    FilePath = [string]$config.command
+    PassThru = $true
+    WindowStyle = 'Hidden'
+  }
+  if ($null -ne $config.argumentList -and [string]$config.argumentList -ne '') {
+    $params.ArgumentList = [string]$config.argumentList
+  }
+  if ($null -ne $config.cwd -and [string]$config.cwd -ne '') {
+    $params.WorkingDirectory = [string]$config.cwd
+  }
+  if ($null -ne $config.env) {
+    $envTable = @{}
+    foreach ($property in $config.env.PSObject.Properties) {
+      if ($null -eq $property.Value) {
+        $envTable[$property.Name] = $null
+      } else {
+        $envTable[$property.Name] = [string]$property.Value
+      }
+    }
+    if ($envTable.Count -gt 0) {
+      $params.Environment = $envTable
+    }
+  }
+  if ($null -ne $config.stdoutLogPath -and [string]$config.stdoutLogPath -ne '') {
+    $stdoutPath = [string]$config.stdoutLogPath
+    [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($stdoutPath))
+    $params.RedirectStandardOutput = $stdoutPath
+  }
+  if ($null -ne $config.stderrLogPath -and [string]$config.stderrLogPath -ne '') {
+    $stderrPath = [string]$config.stderrLogPath
+    [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($stderrPath))
+    $params.RedirectStandardError = $stderrPath
+  }
+  $child = Start-Process @params
+  [System.IO.File]::WriteAllText([string]$config.pidPath, (@{ pid = [int]$child.Id } | ConvertTo-Json -Compress))
+} catch {
+  [System.IO.File]::WriteAllText([string]$config.errorPath, ($_ | Out-String))
+  exit 1
+}
+`);
+}
+
+function createWindowsPowerShellLaunchCommand(wrapperEncodedCommand: string): string {
+  const wrapperArgumentList = createWindowsProcessArgumentList([
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-EncodedCommand",
+    wrapperEncodedCommand,
+  ]);
+  return encodePowerShellCommand(`
+$ErrorActionPreference = 'Stop'
+$pwshPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+$wrapper = Start-Process -FilePath $pwshPath -ArgumentList ${quotePowerShellString(wrapperArgumentList)} -WindowStyle Hidden -PassThru
+[Console]::Out.WriteLine((@{ pid = [int]$wrapper.Id } | ConvertTo-Json -Compress))
+`);
+}
+
+async function execFileUtf8(command: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Promise<{ stderr: string; stdout: string }> {
+  return await new Promise((resolveExec, rejectExec) => {
+    execFile(
+      command,
+      args,
+      {
+        cwd: options.cwd,
+        encoding: "utf8",
+        env: options.env,
+        maxBuffer: 1024 * 1024,
+        windowsHide: process.platform === "win32",
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const message = errorCode(error) === "ENOENT"
+            ? "Windows hidden background launcher requires pwsh.exe (PowerShell 7+) on PATH"
+            : errorMessage(error);
+          rejectExec(new Error(message, { cause: error }));
+          return;
+        }
+        resolveExec({ stderr, stdout });
+      },
+    );
+  });
+}
+
+async function spawnWindowsPowerShellHiddenProcess(request: SpawnProcessRequest): Promise<{ pid: number }> {
+  const invocation = createCommandInvocation(request);
+  if (request.stdoutLogPath != null) await mkdir(dirname(request.stdoutLogPath), { recursive: true });
+  if (request.stderrLogPath != null) await mkdir(dirname(request.stderrLogPath), { recursive: true });
+
+  const launchRoot = dirname(request.stdoutLogPath ?? request.stderrLogPath ?? join(tmpdir(), "open-design-platform.log"));
+  await mkdir(launchRoot, { recursive: true });
+  const launchId = `${process.pid}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2)}`;
+  const pidPath = join(launchRoot, `.windows-hidden-${launchId}.pid.json`);
+  const errorPath = join(launchRoot, `.windows-hidden-${launchId}.error.txt`);
+  const wrapperEncodedCommand = createWindowsPowerShellWrapperCommand({
+    argumentList: createWindowsProcessArgumentList(invocation.args),
+    command: invocation.command,
+    cwd: request.cwd,
+    env: createWindowsEnvironmentOverrides(request.env),
+    errorPath,
+    pidPath,
+    stderrLogPath: request.stderrLogPath,
+    stdoutLogPath: request.stdoutLogPath,
+  });
+  const encodedCommand = createWindowsPowerShellLaunchCommand(wrapperEncodedCommand);
+  const { stderr, stdout } = await execFileUtf8(
+    "pwsh.exe",
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand],
+    { cwd: request.cwd, env: process.env },
+  );
+  const wrapperJsonLine = stdout.trim().split(/\r?\n/).filter((line) => line.length > 0).at(-1);
+  const wrapper = wrapperJsonLine == null ? null : JSON.parse(wrapperJsonLine) as { pid?: unknown };
+  if (typeof wrapper?.pid !== "number" || !Number.isFinite(wrapper.pid)) {
+    throw new Error(`failed to spawn hidden Windows background process${stderr.length > 0 ? `: ${stderr.trim()}` : ""}`);
+  }
+
+  try {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 5000) {
+      const payload = await readFile(pidPath, "utf8").catch(() => null);
+      if (payload != null) {
+        const parsed = JSON.parse(payload) as { pid?: unknown };
+        if (typeof parsed.pid === "number" && Number.isFinite(parsed.pid)) return { pid: parsed.pid };
+      }
+      const launchError = await readFile(errorPath, "utf8").catch(() => null);
+      if (launchError != null && launchError.trim().length > 0) {
+        throw new Error(`failed to spawn hidden Windows background process: ${launchError.trim()}`);
+      }
+      await sleep(50);
+    }
+    throw new Error(`timed out waiting for hidden Windows background process pid (launcher pid ${wrapper.pid})`);
+  } finally {
+    await rm(pidPath, { force: true }).catch(() => undefined);
+    await rm(errorPath, { force: true }).catch(() => undefined);
+  }
+}
+
 export async function spawnBackgroundProcess(request: SpawnProcessRequest): Promise<{ pid: number }> {
+  if (process.platform === "win32" && request.windowsHiddenLauncher === "powershell") {
+    return await spawnWindowsPowerShellHiddenProcess(request);
+  }
+
   const invocation = createCommandInvocation(request);
   const child = spawn(invocation.command, invocation.args, {
     cwd: request.cwd,

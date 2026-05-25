@@ -39,7 +39,9 @@ export type ToolDevOptions = {
 
 export type ToolDevAppConfig = {
   app: ToolDevAppName;
+  latestStderrLogPath: string;
   latestLogPath: string;
+  latestStdoutLogPath: string;
   logDir: string;
 };
 
@@ -85,10 +87,27 @@ function resolveAppConfig(options: {
   namespaceRoot: string;
   toolsDevRoot: string;
 }): ToolDevAppConfig {
+  const latestLogPath = resolveLogFilePath({
+    runtimeRoot: options.namespaceRoot,
+    app: options.app,
+    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+  });
   return {
     app: options.app,
-    latestLogPath: resolveLogFilePath({ runtimeRoot: options.namespaceRoot, app: options.app, contract: OPEN_DESIGN_SIDECAR_CONTRACT }),
-    logDir: path.dirname(resolveLogFilePath({ runtimeRoot: options.namespaceRoot, app: options.app, contract: OPEN_DESIGN_SIDECAR_CONTRACT })),
+    latestLogPath,
+    latestStderrLogPath: resolveLogFilePath({
+      runtimeRoot: options.namespaceRoot,
+      app: options.app,
+      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+      fileName: "latest.err.log",
+    }),
+    latestStdoutLogPath: resolveLogFilePath({
+      runtimeRoot: options.namespaceRoot,
+      app: options.app,
+      contract: OPEN_DESIGN_SIDECAR_CONTRACT,
+      fileName: "latest.out.log",
+    }),
+    logDir: path.dirname(latestLogPath),
   };
 }
 

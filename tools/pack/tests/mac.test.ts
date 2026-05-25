@@ -239,13 +239,11 @@ describe("validateMacNativeRebuildOutput", () => {
   it("preserves non-ENOENT filesystem diagnostics from stat failures", async () => {
     const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-mac-"));
     try {
-      const buildPath = join(root, "node_modules", "better-sqlite3", "build");
-      const nativePath = join(buildPath, "Release", "better_sqlite3.node");
-      await mkdir(dirname(buildPath), { recursive: true });
-      await writeFile(buildPath, "not a directory", "utf8");
+      const nativePath = join(root, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node");
+      const error = Object.assign(new Error(`EACCES: permission denied, stat '${nativePath}'`), { code: "EACCES" });
 
-      await expect(validateMacNativeRebuildOutput(root)).resolves.toContain(
-        `native module output could not be inspected: ${nativePath}: ENOTDIR: not a directory, stat '${nativePath}'`,
+      await expect(validateMacNativeRebuildOutput(root, async () => Promise.reject(error))).resolves.toContain(
+        `native module output could not be inspected: ${nativePath}: EACCES: permission denied, stat '${nativePath}'`,
       );
     } finally {
       await rm(root, { force: true, recursive: true });

@@ -185,16 +185,21 @@ function nativeRebuildOutputPath(appRoot: string): string {
   return join(appRoot, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node");
 }
 
+type NativeRebuildOutputStat = (path: string) => Promise<{ size: number }>;
+
 function formatMacNativeRebuildOutputStatError(nativePath: string, error: unknown): string {
   if ((error as NodeJS.ErrnoException).code === "ENOENT") return `native module output is missing: ${nativePath}`;
   const detail = error instanceof Error ? error.message : String(error);
   return `native module output could not be inspected: ${nativePath}: ${detail}`;
 }
 
-export async function validateMacNativeRebuildOutput(appRoot: string): Promise<string | null> {
+export async function validateMacNativeRebuildOutput(
+  appRoot: string,
+  statNativeOutput: NativeRebuildOutputStat = stat,
+): Promise<string | null> {
   const nativePath = nativeRebuildOutputPath(appRoot);
   try {
-    const metadata = await stat(nativePath);
+    const metadata = await statNativeOutput(nativePath);
     if (metadata.size < 100_000) return `native module output is too small: ${nativePath}`;
     return null;
   } catch (error) {
