@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-25T09:52:59.250Z",
+  "generatedAt": "2026-05-25T09:53:22.680Z",
   "contributors": {
     "1115052994": {
       "lastAnnouncedTier": "spark",
@@ -224,8 +224,8 @@
     },
     "siri-ray": {
       "lastAnnouncedTier": "beacon",
-      "lastKnownScore": 1218,
-      "lastCheckedAt": "2026-05-25T09:52:59.250Z",
+      "lastKnownScore": 1228,
+      "lastCheckedAt": "2026-05-25T09:53:22.680Z",
       "scoreVersion": "weighted-v1",
       "lastAnnouncedAt": "2026-05-18T10:06:32.173Z"
     },
