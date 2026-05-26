@@ -164,7 +164,7 @@ describe('GET /api/integrations/vela/status', () => {
       expect(body.user).toBeNull();
       expect(JSON.stringify(body)).not.toContain('rt-env-secret');
     } finally {
-      await writeAppConfig(dataDir, previous);
+      await writeAppConfig(dataDir, previous as unknown as Record<string, unknown>);
     }
   });
 

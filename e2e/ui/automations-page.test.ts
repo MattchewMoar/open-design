@@ -115,7 +115,7 @@ test.describe('Automations page', () => {
         id: 'routine-paused-1',
         name: 'Weekly release notes',
         prompt: 'Draft release notes.',
-        schedule: { kind: 'weekly', dayOfWeek: 1, time: '09:00', timezone: 'UTC' },
+        schedule: { kind: 'weekly', weekday: 1, time: '09:00', timezone: 'UTC' },
         target: { mode: 'create_each_run' },
         enabled: false,
         nextRunAt: null,
@@ -504,11 +504,14 @@ test.describe('Automations page', () => {
       const method = route.request().method();
       if (method === 'PATCH') {
         const payload = route.request().postDataJSON() as { enabled?: boolean };
-        routines = [{ ...routines[0], enabled: Boolean(payload.enabled), updatedAt: Date.now() }];
+        const routine = routines[0];
+        if (!routine) throw new Error('missing routine fixture');
+        const updated = { ...routine, enabled: Boolean(payload.enabled), updatedAt: Date.now() };
+        routines = [updated];
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ routine: routines[0] }),
+          body: JSON.stringify({ routine: updated }),
         });
         return;
       }
@@ -788,18 +791,21 @@ test.describe('Automations page', () => {
     await page.route('**/api/routines/routine-edit-1', async (route) => {
       if (route.request().method() === 'PATCH') {
         const payload = route.request().postDataJSON() as { name?: string; prompt?: string };
+        const routine = routines[0];
+        if (!routine) throw new Error('missing routine fixture');
+        const updated = {
+          ...routine,
+          name: payload.name ?? routine.name,
+          prompt: payload.prompt ?? routine.prompt,
+          updatedAt: Date.now(),
+        };
         routines = [
-          {
-            ...routines[0],
-            name: payload.name ?? routines[0].name,
-            prompt: payload.prompt ?? routines[0].prompt,
-            updatedAt: Date.now(),
-          },
+          updated,
         ];
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ routine: routines[0] }),
+          body: JSON.stringify({ routine: updated }),
         });
         return;
       }

@@ -333,6 +333,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: 3.1050.0
         version: 3.1050.0
+      '@open-design/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
       '@playwright/test':
         specifier: 1.60.0
         version: 1.60.0
