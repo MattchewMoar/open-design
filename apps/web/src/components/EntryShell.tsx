@@ -115,8 +115,6 @@ import {
   amrLoginPollOutcome,
 } from './amrLoginPolling';
 
-const AMR_AUTH_URL = 'https://vela.powerformer.net/login?redirect=/wallet';
-
 // The topbar chips (GitHub star, model switcher, Use everywhere)
 // collapse into the settings dropdown when the viewport gets
 // narrow. The transition is driven entirely by CSS @media queries
@@ -1586,6 +1584,7 @@ function OnboardingView({
                   <div className="onboarding-view__amr-cloud-card">
                     <OnboardingChoiceCard
                       icon="orbit"
+                      agentIconId="amr"
                       title={t('settings.amrCloud')}
                       body={t('settings.onboardingExecutionBody')}
                       benefits={[
@@ -1596,13 +1595,6 @@ function OnboardingView({
                       ]}
                       badge={t('settings.onboardingRecommended')}
                       officialLabel={t('settings.onboardingAmrCloudOfficialBadge')}
-                      authAction={{
-                        label: amrSignedIn
-                          ? t('settings.onboardingAmrCloudAuthorizedAction')
-                          : t('settings.onboardingAmrCloudAuthorizeAction'),
-                        href: AMR_AUTH_URL,
-                        authorized: amrSignedIn,
-                      }}
                       statusSlot={
                         runtime === 'amr' ? (
                           <AmrAccountControl
@@ -2437,6 +2429,7 @@ function OnboardingDropdown(props: OnboardingDropdownProps) {
 
 function OnboardingChoiceCard({
   icon,
+  agentIconId,
   title,
   body,
   benefits,
@@ -2444,12 +2437,12 @@ function OnboardingChoiceCard({
   selected,
   badge,
   officialLabel,
-  authAction,
   statusSlot,
   featured,
   onClick,
 }: {
   icon: 'orbit' | 'hammer' | 'sliders' | 'github' | 'upload' | 'sparkles';
+  agentIconId?: string;
   title: string;
   body: string;
   benefits?: string[];
@@ -2457,7 +2450,6 @@ function OnboardingChoiceCard({
   selected: boolean;
   badge?: string;
   officialLabel?: string;
-  authAction?: { label: string; href: string; authorized?: boolean };
   statusSlot?: ReactNode;
   featured?: boolean;
   onClick: () => void;
@@ -2485,8 +2477,21 @@ function OnboardingChoiceCard({
           <img src="/official_badge.svg" alt={officialLabel} draggable={false} />
         </span>
       ) : null}
-      <span className="onboarding-view__icon">
-        <Icon name={icon} size={18} />
+      <span
+        className={
+          'onboarding-view__icon' +
+          (agentIconId ? ' onboarding-view__icon--asset' : '')
+        }
+      >
+        {agentIconId ? (
+          <AgentIcon
+            id={agentIconId}
+            size={featured ? 52 : 40}
+            className="onboarding-view__agent-logo"
+          />
+        ) : (
+          <Icon name={icon} size={18} />
+        )}
       </span>
       <span className="onboarding-view__card-copy">
         <span className="onboarding-view__card-top">
@@ -2505,27 +2510,6 @@ function OnboardingChoiceCard({
           <small>{body}</small>
         )}
       </span>
-      {authAction ? (
-        <span className="onboarding-view__auth-area">
-          {authAction.authorized ? (
-            <span
-              className="onboarding-view__auth-link is-authorized"
-              aria-label={authAction.label}
-            >
-              <span>{authAction.label}</span>
-            </span>
-          ) : (
-            <a
-              className="onboarding-view__auth-link"
-              href={authAction.href}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <span>{authAction.label}</span>
-            </a>
-          )}
-        </span>
-      ) : null}
       {statusSlot ? (
         <span className="onboarding-view__card-status">
           {statusSlot}

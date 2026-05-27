@@ -28,7 +28,10 @@ import type { Locale } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { AgentIcon } from './AgentIcon';
 import { AmrLoginPill } from './AmrLoginPill';
-import { fetchVelaLoginStatus } from '../providers/daemon';
+import {
+  fetchVelaLoginStatus,
+  type VelaLoginStatus,
+} from '../providers/daemon';
 import { ExportDiagnosticsRow } from './ExportDiagnosticsButton';
 import { Icon } from './Icon';
 import {
@@ -863,9 +866,6 @@ export function SettingsDialog({
   // the authorize button — so it won't vanish while the user is still moving
   // toward it.
   const [amrCoachmarkArmed, setAmrCoachmarkArmed] = useState(false);
-  // null = unknown (status not fetched yet); the sign-in coachmark only shows
-  // once we know the user is NOT logged in.
-  const [amrLoggedIn, setAmrLoggedIn] = useState<boolean | null>(null);
   // The fake-cursor coachmark dismisses as soon as the real pointer reaches the
   // authorize button — once the user has found it, the hint has done its job.
   const [amrCoachmarkDismissed, setAmrCoachmarkDismissed] = useState(false);
@@ -875,9 +875,31 @@ export function SettingsDialog({
   const [agentTestState, setAgentTestState] = useState<TestState>({
     status: 'idle',
   });
+  const [amrCardStatus, setAmrCardStatus] = useState<VelaLoginStatus | null>(null);
+  const [amrCardStatusReady, setAmrCardStatusReady] = useState(false);
   const [providerTestState, setProviderTestState] = useState<TestState>({
     status: 'idle',
   });
+
+  useEffect(() => {
+    const hasAmrAgent = agents.some((agent) => agent.id === 'amr' && agent.available);
+    if (!hasAmrAgent) {
+      setAmrCardStatus(null);
+      setAmrCardStatusReady(false);
+      return;
+    }
+    let cancelled = false;
+    setAmrCardStatusReady(false);
+    void fetchVelaLoginStatus().then((next) => {
+      if (!cancelled) {
+        setAmrCardStatus(next);
+        setAmrCardStatusReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [agents]);
   const [byokPreconditionNotice, setByokPreconditionNotice] = useState<{
     action: ByokPreconditionAction;
     message: string;
@@ -974,19 +996,13 @@ export function SettingsDialog({
 
   // One-shot AMR-card focus from the failed-run nudge: scroll the card into
   // view (on the next frame, so it wins over the section's scrollTop reset
-  // above) and play a brief highlight. Resolve AMR auth so the sign-in
-  // coachmark only appears when the user has not authorized AMR yet. If the
-  // execution pane is in API mode the AMR card is absent and this no-ops.
+  // above) and play a brief highlight + arm the sign-in coachmark. The
+  // coachmark only actually shows when the AMR card reports a signed-out state
+  // (`amrCardStatus?.loggedIn === false`). If the execution pane is in API mode
+  // the AMR card is absent and this no-ops.
   useEffect(() => {
     if (initialHighlight !== 'amr' || activeSection !== 'execution') return;
     let cancelled = false;
-    void fetchVelaLoginStatus()
-      .then((s) => {
-        if (!cancelled) setAmrLoggedIn(s?.loggedIn === true);
-      })
-      .catch(() => {
-        if (!cancelled) setAmrLoggedIn(false);
-      });
     const raf = requestAnimationFrame(() => {
       if (cancelled) return;
       amrCardRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -2006,10 +2022,14 @@ export function SettingsDialog({
     fallback: string,
   ) => {
     if (!model) return fallback;
-    if (model.label && model.label !== model.id) {
-      return `${model.label} (${model.id})`;
+    const label = model.label?.trim();
+    const id = model.id.trim();
+    if (label && label !== id) {
+      return label.toLowerCase().includes(id.toLowerCase())
+        ? label
+        : `${label} (${id})`;
     }
-    return model.label || model.id;
+    return label || id;
   };
   const agentModelSummary = (agent: AgentInfo) => {
     if (!Array.isArray(agent.models) || agent.models.length === 0) return null;
@@ -2029,6 +2049,12 @@ export function SettingsDialog({
       selected.reasoningOptions.length > 0;
     if (!hasModels && !hasReasoning) return null;
     const choice = cfg.agentModels?.[selected.id] ?? {};
+    const knownModelIds = selected.models?.map((m) => m.id) ?? [];
+    const allowCustomModel = selected.id !== 'amr';
+    const configuredModel =
+      typeof choice.model === 'string' && choice.model
+        ? choice.model
+        : null;
     const setChoice = (
       next: { model?: string; reasoning?: string },
     ) => {
@@ -2044,15 +2070,20 @@ export function SettingsDialog({
       });
     };
     const modelValue =
-      choice.model ?? selected.models?.[0]?.id ?? '';
+      selected.id === 'amr' &&
+      configuredModel &&
+      !knownModelIds.includes(configuredModel)
+        ? selected.models?.[0]?.id ?? ''
+        : configuredModel ?? selected.models?.[0]?.id ?? '';
     const reasoningValue =
       choice.reasoning ??
       selected.reasoningOptions?.[0]?.id ?? '';
     const customActive =
+      allowCustomModel &&
       hasModels &&
       shouldShowCustomModelInput(
         modelValue,
-        selected.models!.map((m) => m.id),
+        knownModelIds,
         agentCustomModelIds.has(selected.id),
       );
     const selectValue = customActive
@@ -2104,9 +2135,11 @@ export function SettingsDialog({
                   }}
                 >
                   {renderModelOptions(selected.models!)}
-                  <option value={CUSTOM_MODEL_SENTINEL}>
-                    {t('settings.modelCustom')}
-                  </option>
+                  {allowCustomModel ? (
+                    <option value={CUSTOM_MODEL_SENTINEL}>
+                      {t('settings.modelCustom')}
+                    </option>
+                  ) : null}
                 </select>
                 <Icon
                   name="chevron-down"
@@ -2598,6 +2631,10 @@ export function SettingsDialog({
                               ? (a.authMessage ?? a.path ?? '')
                               : (a.path ?? '');
                           const amrHighlighted = isAmrAgent && amrHighlightActive;
+                          const amrCardEmail =
+                            isAmrAgent && active && amrCardStatus?.loggedIn
+                              ? amrCardStatus.user?.email || t('settings.amrSignedIn')
+                              : '';
                           const cardEl = (
                             <div
                               key={a.id}
@@ -2650,9 +2687,6 @@ export function SettingsDialog({
                                                 {benefit}
                                               </span>
                                             ))}
-                                            <span className="agent-card-promo">
-                                              {t('settings.amrPromoBonus')}
-                                            </span>
                                           </span>
                                         ) : description ? (
                                           <>
@@ -2675,6 +2709,13 @@ export function SettingsDialog({
                                           </span>
                                         </div>
                                       ) : null}
+                                      {amrCardEmail ? (
+                                        <div className="agent-card-amr-email">
+                                          <span title={amrCardEmail}>
+                                            {amrCardEmail}
+                                          </span>
+                                        </div>
+                                      ) : null}
                                       {!active && modelSummary ? (
                                         <div className="agent-card-model-summary">
                                           <span>{t('settings.modelPicker')}</span>
@@ -2683,40 +2724,50 @@ export function SettingsDialog({
                                       ) : null}
                                   </div>
                                 </button>
-                                {isAmrAgent && active ? (
-                                  <span
-                                    className="amr-auth-anchor"
-                                    onMouseEnter={() => setAmrCoachmarkDismissed(true)}
-                                  >
-                                    {isAmrAgent &&
-                                    amrCoachmarkArmed &&
-                                    amrLoggedIn === false &&
-                                    !amrCoachmarkDismissed ? (
-                                      <span className="amr-coachmark" aria-hidden="true">
-                                        <span className="amr-coachmark__ring" />
-                                        <svg
-                                          className="amr-coachmark__cursor"
-                                          width="22"
-                                          height="22"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                        >
-                                          <path
-                                            d="M9.4 13V8a1.8 1.8 0 0 1 3.6 0v4.6c.35-.55 1-.95 1.75-.95.65 0 1.25.32 1.6.85.32-.5.9-.8 1.55-.8.8 0 1.5.5 1.78 1.2.35-.3.8-.5 1.3-.5 1.1 0 2 .9 2 2v3.05a5.6 5.6 0 0 1-5.6 5.6h-2.5a5 5 0 0 1-3.75-1.7l-4.2-4.75a1.85 1.85 0 0 1 2.65-2.6L9.4 16Z"
-                                            fill="#fff"
-                                            stroke="#1a1a1a"
-                                            strokeWidth="1.1"
-                                            strokeLinejoin="round"
-                                          />
-                                        </svg>
-                                      </span>
-                                    ) : null}
-                                    <AmrLoginPill
-                                      className="agent-card-amr-auth"
-                                      hideSignedOutStatus
-                                      signInLabel={t('settings.amrAuthorize')}
+                                {isAmrAgent ? (
+                                  active && amrCardStatusReady ? (
+                                    <span
+                                      className="amr-auth-anchor"
+                                      onMouseEnter={() => setAmrCoachmarkDismissed(true)}
+                                    >
+                                      {amrCoachmarkArmed &&
+                                      amrCardStatus?.loggedIn === false &&
+                                      !amrCoachmarkDismissed ? (
+                                        <span className="amr-coachmark" aria-hidden="true">
+                                          <span className="amr-coachmark__ring" />
+                                          <svg
+                                            className="amr-coachmark__cursor"
+                                            width="22"
+                                            height="22"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                          >
+                                            <path
+                                              d="M9.4 13V8a1.8 1.8 0 0 1 3.6 0v4.6c.35-.55 1-.95 1.75-.95.65 0 1.25.32 1.6.85.32-.5.9-.8 1.55-.8.8 0 1.5.5 1.78 1.2.35-.3.8-.5 1.3-.5 1.1 0 2 .9 2 2v3.05a5.6 5.6 0 0 1-5.6 5.6h-2.5a5 5 0 0 1-3.75-1.7l-4.2-4.75a1.85 1.85 0 0 1 2.65-2.6L9.4 16Z"
+                                              fill="#fff"
+                                              stroke="#1a1a1a"
+                                              strokeWidth="1.1"
+                                              strokeLinejoin="round"
+                                            />
+                                          </svg>
+                                        </span>
+                                      ) : null}
+                                      <AmrLoginPill
+                                        className="agent-card-amr-auth"
+                                        hideSignedOutStatus
+                                        hideSignedInStatus
+                                        initialStatus={amrCardStatus}
+                                        skipInitialRefresh
+                                        signInLabel={t('settings.amrAuthorize')}
+                                        onStatusChange={setAmrCardStatus}
+                                      />
+                                    </span>
+                                  ) : (
+                                    <div
+                                      className="agent-card-amr-auth agent-card-amr-auth--placeholder"
+                                      aria-hidden="true"
                                     />
-                                  </span>
+                                  )
                                 ) : null}
                                 {active && !isAmrAgent ? (
                                   <button
@@ -2949,8 +3000,17 @@ export function SettingsDialog({
                 const hasModels =
                   Array.isArray(selected.models) && selected.models.length > 0;
                 const choice = cfg.agentModels?.[selected.id] ?? {};
+                const knownModelIds = selected.models?.map((m) => m.id) ?? [];
+                const configuredModel =
+                  typeof choice.model === 'string' && choice.model
+                    ? choice.model
+                    : null;
                 const modelValue =
-                  choice.model ?? selected.models?.[0]?.id ?? '';
+                  selected.id === 'amr' &&
+                  configuredModel &&
+                  !knownModelIds.includes(configuredModel)
+                    ? selected.models?.[0]?.id ?? ''
+                    : configuredModel ?? selected.models?.[0]?.id ?? '';
                 return (
                   <details className="agent-cli-env settings-memory-advanced">
                     <summary className="agent-cli-env-summary">

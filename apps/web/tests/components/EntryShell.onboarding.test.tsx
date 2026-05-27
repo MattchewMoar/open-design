@@ -144,10 +144,8 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     expect(amrCloud.textContent).toContain('Ready to use');
     expect(amrCloud.textContent).toContain('Many models');
     expect(amrCloud.textContent).toContain('Better pricing');
-    const authorizeLink = screen.getByRole('link', { name: /Authorize AMR/i });
-    expect(authorizeLink.getAttribute('href')).toBe(
-      'https://vela.powerformer.net/login?redirect=/wallet',
-    );
+    expect(screen.queryByRole('link', { name: /Authorize AMR/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Sign in to continue/i })).toBeTruthy();
     await screen.findByText('Not signed in');
     expect(screen.queryByRole('button', { name: /^Sign in$/i })).toBeNull();
     await waitFor(() => {
@@ -367,8 +365,8 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     ) as typeof fetch;
     renderOnboarding();
 
-    expect(await screen.findByText('Authorized')).toBeTruthy();
-    expect(screen.getByText('user@example.com')).toBeTruthy();
+    expect(await screen.findByText('user@example.com')).toBeTruthy();
+    expect(screen.queryByText('Authorized')).toBeNull();
     expect(screen.queryByRole('link', { name: /Authorize AMR/i })).toBeNull();
 
     const continueButton = await screen.findByRole('button', { name: /^Continue$/i });

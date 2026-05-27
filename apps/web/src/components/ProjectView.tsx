@@ -166,6 +166,7 @@ import { buildContinueInCliToast } from '../lib/build-continue-in-cli-toast';
 import { buildClipboardPrompt } from '../lib/build-clipboard-prompt';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { effectiveMaxTokens } from '../state/maxTokens';
+import { effectiveAgentModelChoice } from './agentModelSelection';
 
 
 type ProjectChatSendMeta = ChatSendMeta & {
@@ -2264,6 +2265,10 @@ export function ProjectView({
         config.mode === 'daemon' && config.agentId
           ? config.agentModels?.[config.agentId]
           : undefined;
+      const effectiveSelectedAgentChoice = effectiveAgentModelChoice(
+        selectedAgent,
+        selectedAgentChoice,
+      );
       const assistantAgentId =
         config.mode === 'daemon'
           ? config.agentId ?? undefined
@@ -2273,7 +2278,7 @@ export function ProjectView({
           ? agentModelDisplayName(
               config.agentId,
               selectedAgent?.name,
-              selectedAgentChoice?.model,
+              effectiveSelectedAgentChoice?.model,
             )
           : apiProtocolModelLabel(config.apiProtocol, config.model);
       const preTurnFileNames = projectFiles.map((f) => f.name);
@@ -2666,7 +2671,7 @@ export function ProjectView({
           handlers.onError(new Error('Pick a local agent first (top bar).'));
           return;
         }
-        const choice = selectedAgentChoice;
+        const choice = effectiveSelectedAgentChoice;
         // v2 analytics: when the active project is a DS workspace
         // (created by `prepareCreatedDesignSystemProject`, identifiable
         // by `metadata.importedFrom === 'design-system'`), every run
@@ -3025,12 +3030,16 @@ export function ProjectView({
     config.mode === 'daemon' && config.agentId
       ? config.agentModels?.[config.agentId]
       : undefined;
+  const effectiveSelectedPluginActionChoice = effectiveAgentModelChoice(
+    selectedPluginActionAgent,
+    selectedPluginActionChoice,
+  );
   const pluginWorkflowAgentName =
     config.mode === 'daemon'
       ? agentModelDisplayName(
           config.agentId,
           selectedPluginActionAgent?.name,
-          selectedPluginActionChoice?.model,
+          effectiveSelectedPluginActionChoice?.model,
         )
       : apiProtocolModelLabel(config.apiProtocol, config.model);
 
