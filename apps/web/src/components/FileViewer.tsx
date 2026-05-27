@@ -828,6 +828,8 @@ export function LiveArtifactViewer({
   const [refreshEvents, setRefreshEvents] = useState<LiveArtifactRefreshEvent[]>([]);
   const [refreshHistory, setRefreshHistory] = useState<LiveArtifactRefreshLogEntry[]>([]);
   const [presentMenuOpen, setPresentMenuOpen] = useState(false);
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
+  const zoomMenuRef = useRef<HTMLDivElement | null>(null);
   const [inTabPresent, setInTabPresent] = useState(false);
   const presentWrapRef = useRef<HTMLDivElement | null>(null);
   const [chromeActionsHost, setChromeActionsHost] = useState<HTMLElement | null>(null);
@@ -989,10 +991,6 @@ export function LiveArtifactViewer({
     });
   }, [mode, previewUrl, liveArtifact.artifactId, projectId]);
 
-  function bumpZoom(delta: number) {
-    setZoom((z) => Math.max(25, Math.min(200, z + delta)));
-  }
-
   async function handleRefresh() {
     if (refreshing) return;
     setRefreshing(true);
@@ -1055,6 +1053,23 @@ export function LiveArtifactViewer({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [inTabPresent]);
+
+  useEffect(() => {
+    if (!zoomMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!zoomMenuRef.current) return;
+      if (!zoomMenuRef.current.contains(e.target as Node)) setZoomMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [zoomMenuOpen]);
 
   return (
     <div className={`viewer html-viewer live-artifact-viewer${inTabPresent ? ' is-tab-present' : ''}`}>
@@ -1140,35 +1155,40 @@ export function LiveArtifactViewer({
               tabIndex={mode === 'preview' ? 0 : -1}
             />
             <span className="viewer-divider" aria-hidden />
-            <button
-              type="button"
-              className="icon-only"
-              onClick={() => bumpZoom(-25)}
-              title={t('fileViewer.zoomOut')}
-              aria-label={t('fileViewer.zoomOut')}
-              tabIndex={mode === 'preview' ? 0 : -1}
-            >
-              <Icon name="minus" size={14} />
-            </button>
-            <button
-              type="button"
-              className="viewer-action viewer-zoom-level"
-              onClick={() => setZoom(100)}
-              title={t('fileViewer.resetZoom')}
-              tabIndex={mode === 'preview' ? 0 : -1}
-            >
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
-            </button>
-            <button
-              type="button"
-              className="icon-only"
-              onClick={() => bumpZoom(25)}
-              title={t('fileViewer.zoomIn')}
-              aria-label={t('fileViewer.zoomIn')}
-              tabIndex={mode === 'preview' ? 0 : -1}
-            >
-              <Icon name="plus" size={14} />
-            </button>
+            <div className="zoom-menu viewer-toolbar-zoom" ref={zoomMenuRef}>
+              <button
+                type="button"
+                className="viewer-action zoom-trigger"
+                aria-haspopup="menu"
+                aria-expanded={zoomMenuOpen}
+                title={t('fileViewer.resetZoom')}
+                tabIndex={mode === 'preview' ? 0 : -1}
+                onClick={() => setZoomMenuOpen((v) => !v)}
+              >
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
+              </button>
+              {zoomMenuOpen && mode === 'preview' ? (
+                <div className="zoom-menu-popover" role="menu">
+                  {[50, 75, 100, 125, 150, 200].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      className={`zoom-menu-item${zoom === level ? ' active' : ''}`}
+                      role="menuitem"
+                      onClick={() => {
+                        setZoom(level);
+                        setZoomMenuOpen(false);
+                      }}
+                    >
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{level}%</span>
+                      {zoom === level ? (
+                        <Icon name="check" size={13} />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <span className="viewer-divider" aria-hidden />
             <a
               className="ghost-link"
@@ -6539,9 +6559,9 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                 className={`viewer-action viewer-action-icon${drawOverlayOpen ? ' active' : ''}`}
                 type="button"
                 data-testid="draw-overlay-toggle"
-                data-tooltip="Mark"
-                title="Mark"
-                aria-label="Mark"
+                data-tooltip={t('fileViewer.mark')}
+                title={t('fileViewer.mark')}
+                aria-label={t('fileViewer.mark')}
                 aria-pressed={drawOverlayOpen}
                 onClick={activateDrawTool}
               >
@@ -6552,9 +6572,9 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                 className={`viewer-action viewer-action-icon${manualEditMode ? ' active' : ''}`}
                 type="button"
                 data-testid="manual-edit-mode-toggle"
-                data-tooltip="Edit"
-                title="Edit"
-                aria-label="Edit"
+                data-tooltip={t('fileViewer.edit')}
+                title={t('fileViewer.edit')}
+                aria-label={t('fileViewer.edit')}
                 aria-pressed={manualEditMode}
                 onClick={activateManualEditTool}
               >

@@ -578,14 +578,14 @@ export function PreviewDrawOverlay({
           >
             <Icon name="close" size={13} />
           </button>
-          <div style={subToolGroupStyle} aria-label="Mark tool">
+          <div style={subToolGroupStyle} aria-label={t('fileViewer.markTool')}>
             <button
               type="button"
               onClick={() => setMarkTool('box')}
               disabled={sending}
-              aria-label="Box select"
-              title="Box select"
-              data-tooltip="Box select"
+              aria-label={t('fileViewer.boxSelect')}
+              title={t('fileViewer.boxSelect')}
+              data-tooltip={t('fileViewer.boxSelect')}
               className="preview-draw-subtool-action"
               style={subToolButtonStyle(markTool === 'box')}
             >
@@ -595,9 +595,9 @@ export function PreviewDrawOverlay({
               type="button"
               onClick={() => setMarkTool('pen')}
               disabled={sending}
-              aria-label="Pen"
-              title="Pen"
-              data-tooltip="Pen"
+              aria-label={t('sketch.toolPen')}
+              title={t('sketch.toolPen')}
+              data-tooltip={t('sketch.toolPen')}
               className="preview-draw-subtool-action"
               style={subToolButtonStyle(markTool === 'pen')}
             >

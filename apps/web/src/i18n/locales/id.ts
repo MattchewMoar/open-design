@@ -1114,6 +1114,10 @@ export const id: Dict = {
   'fileViewer.comment': 'Komentar',
   'fileViewer.edit': 'Edit',
   'fileViewer.draw': 'Gambar',
+  'fileViewer.mark': 'Mark',
+  'fileViewer.markTool': 'Mark tool',
+  'fileViewer.boxSelect': 'Box select',
+  'fileViewer.screenshot': 'Screenshot',
 
   'manualEdit.layers': 'Lapisan',
   'manualEdit.editableCount': '{count} dapat diedit',

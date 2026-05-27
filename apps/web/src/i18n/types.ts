@@ -1908,6 +1908,10 @@ export interface Dict {
   'fileViewer.comment': string;
   'fileViewer.edit': string;
   'fileViewer.draw': string;
+  'fileViewer.mark': string;
+  'fileViewer.markTool': string;
+  'fileViewer.boxSelect': string;
+  'fileViewer.screenshot': string;
   'manualEdit.layers': string;
   'manualEdit.editableCount': string;
   'manualEdit.hiddenBadge': string;
