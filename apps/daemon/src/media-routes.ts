@@ -1,5 +1,6 @@
 import type { Express } from 'express';
 import type { RouteDeps } from './server-context.js';
+import { proxyDispatcherRequestInit } from './connectionTest.js';
 
 export interface RegisterMediaRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'ids' | 'media' | 'appConfig' | 'orbit' | 'nativeDialogs' | 'projectStore' | 'projectFiles' | 'conversations' | 'research'> {}
 
@@ -166,6 +167,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
 
       task.status = 'running';
       persistMediaTask(task);
+      const proxyDispatcher = proxyDispatcherRequestInit();
       generateMedia({
         projectRoot: PROJECT_ROOT,
         projectsRoot: PROJECTS_DIR,
@@ -191,6 +193,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         compositionDir: req.body?.compositionDir,
         image: req.body?.image,
         onProgress: (line: any) => appendTaskProgress(task, line),
+        requestInit: proxyDispatcher.requestInit,
       })
         .then((meta: any) => {
           task.status = 'done';
@@ -217,7 +220,8 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
             `[task ${taskId.slice(0, 8)}] failed status=${task.error.status} ` +
               `message=${(task.error.message || '').slice(0, 240)}`,
           );
-        });
+        })
+        .finally(() => proxyDispatcher.close());
 
       res.status(202).json({
         taskId,
