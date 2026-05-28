@@ -2367,6 +2367,18 @@ Required output for this turn:
 
 `;
 
+// Smaller override for non-discovery / non-task-type form ids. These
+// forms are not artifact-build transitions, so we only need to suppress
+// the form re-ask without directing the model toward RULE 2 / RULE 3.
+// Exported so tests can pin the literal content independently.
+export const FORM_ANSWERED_GENERIC_OVERRIDE = `## OVERRIDE \u2014 form already answered (this is turn 2 or later)
+
+The user already submitted their form answers (see # User request below).
+Do not ask the same form again. Treat the submitted answers as the active
+user instruction and respond accordingly.
+
+`;
+
 function formAnswerTransitionForCurrentPrompt(currentPrompt) {
   if (typeof currentPrompt !== 'string') return null;
   const trimmed = currentPrompt.trim();
@@ -2388,7 +2400,7 @@ function formAnswerTransitionForCurrentPrompt(currentPrompt) {
     // the exact main wording.
     `The user has answered the ${formId} form. Do not emit another ${formId} form.`,
   ];
-  if (formId.toLowerCase() === 'discovery') {
+  if (formId.toLowerCase() === 'discovery' || formId.toLowerCase() === 'task-type') {
     lines.push(
       'Continue with RULE 2 / RULE 3 now. For Branch B answers, build now instead of asking another brief.',
     );
@@ -10833,12 +10845,18 @@ export async function startServer({
     // instructions and request) — see server.ts:9920 composer notes.
     const ECHO_GUARD =
       '\n\n(Do not quote, restate, or echo the # Instructions block above in your reply. Begin your response with the answer to the # User request below.)';
-    const formAlreadyAnswered = FORM_ANSWERS_HEADER_RE.test(
+    const formAnswerMatch = FORM_ANSWERS_HEADER_RE.exec(
       typeof currentPrompt === 'string' ? currentPrompt : '',
     );
-    const formOverride = formAlreadyAnswered
-      ? FORM_ANSWERED_SYSTEM_OVERRIDE
-      : '';
+    const formIdForOverride = formAnswerMatch
+      ? ((formAnswerMatch[1] || 'form').trim().replace(/[^\w.-]/g, '') || 'form').toLowerCase()
+      : null;
+    const formOverride =
+      formIdForOverride === 'discovery' || formIdForOverride === 'task-type'
+        ? FORM_ANSWERED_SYSTEM_OVERRIDE
+        : formIdForOverride !== null
+          ? FORM_ANSWERED_GENERIC_OVERRIDE
+          : '';
     const promptImagePaths = selectPromptImagePaths(
       def.id,
       safeImages,
@@ -11979,6 +11997,7 @@ export async function startServer({
       design.runs.finish(run, 'failed', 1, null);
     });
     child.on('close', async (code, signal) => {
+      try {
       clearInactivityWatchdog();
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
@@ -12086,8 +12105,6 @@ export async function startServer({
             // read-only, etc.) is fine — fall through to the generic
             // empty-output message.
           }
-          // Best-effort cleanup so /tmp doesn't accrue per-run logs.
-          fs.promises.unlink(agentLogFilePath).catch(() => {});
         }
         const authFailure = classifyAgentAuthFailure(agentId, combinedDetail);
         const serviceFailure = !authFailure
@@ -12210,6 +12227,16 @@ export async function startServer({
         })();
       }
       design.runs.finish(run, status, code, signal);
+      } finally {
+        // Best-effort cleanup of the per-run agy log file on every close
+        // path — successful, failed, cancelled, or non-zero exit — so
+        // /tmp doesn't accumulate one file per Antigravity run. The log
+        // is read inside the empty-output guard above before this finally
+        // runs, so the read always happens before the unlink.
+        if (agentLogFilePath) {
+          fs.promises.unlink(agentLogFilePath).catch(() => {});
+        }
+      }
     });
     if (writePromptToChildStdin && child.stdin) {
       const promptInputFormat = def.promptInputFormat ?? 'text';

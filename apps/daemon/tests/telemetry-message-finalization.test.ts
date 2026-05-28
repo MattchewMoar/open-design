@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  FORM_ANSWERED_GENERIC_OVERRIDE,
   composeChatUserRequestForAgent,
   createFinalizedMessageTelemetryReporter,
   shouldReportRunCompletedFromMessage,
@@ -78,13 +79,24 @@ describe('Langfuse message finalization gate', () => {
     );
   });
 
-  it('keeps non-discovery form answers active without forcing the build transition', () => {
+  it('task-type form answers trigger the build transition just like discovery', () => {
     const prompt = composeChatUserRequestForAgent(
       '## user\ninitial brief',
       '[form answers - task-type]\n- taskType: Slide deck',
     );
 
     expect(prompt).toContain('The user has answered the task-type form.');
+    expect(prompt).toContain('build now instead of asking another brief');
+    expect(prompt).not.toContain('Treat these form answers as the active user turn');
+  });
+
+  it('unknown form ids get the generic transition without forcing the build', () => {
+    const prompt = composeChatUserRequestForAgent(
+      '## user\ninitial brief',
+      '[form answers - preferences]\n- theme: dark',
+    );
+
+    expect(prompt).toContain('The user has answered the preferences form.');
     expect(prompt).toContain('Treat these form answers as the active user turn');
     expect(prompt).not.toContain('build now instead of asking another brief');
   });
@@ -162,6 +174,20 @@ describe('Langfuse message finalization gate', () => {
     expect(FORM_ANSWERED_SYSTEM_OVERRIDE).toContain('RULE 2');
     expect(FORM_ANSWERED_SYSTEM_OVERRIDE).toContain('RULE 3');
     expect(FORM_ANSWERED_SYSTEM_OVERRIDE).toContain('`<artifact>`');
+  });
+
+  it('FORM_ANSWERED_GENERIC_OVERRIDE is used for non-discovery/task-type form ids', () => {
+    // Non-build-transition forms should get a smaller override that only
+    // suppresses re-asking — not the RULE 2 / RULE 3 / artifact directive.
+    expect(FORM_ANSWERED_GENERIC_OVERRIDE).toContain('## OVERRIDE — form already answered');
+    expect(FORM_ANSWERED_GENERIC_OVERRIDE).toContain('turn 2 or later');
+    expect(FORM_ANSWERED_GENERIC_OVERRIDE).toContain('Do not ask the same form again');
+    // Must NOT contain the artifact-build directive that only applies to
+    // discovery / task-type — sending it for an unrelated form id would give
+    // the model contradictory instructions.
+    expect(FORM_ANSWERED_GENERIC_OVERRIDE).not.toContain('RULE 2');
+    expect(FORM_ANSWERED_GENERIC_OVERRIDE).not.toContain('RULE 3');
+    expect(FORM_ANSWERED_GENERIC_OVERRIDE).not.toContain('`<artifact>`');
   });
 
   it('FORM_ANSWERED_SYSTEM_OVERRIDE only fires through composeChatUserRequestForAgent\'s transition gate', async () => {

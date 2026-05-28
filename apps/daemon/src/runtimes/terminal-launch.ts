@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -47,8 +47,12 @@ async function launchOnDarwin(command: string): Promise<TerminalLaunchResult> {
 }
 
 // Linux: try the Debian/Ubuntu meta-emulator first, then the common
-// concrete terminals. Each attempt is a fire-and-forget execFile that
-// detaches so the user's window survives the daemon's process group.
+// concrete terminals. Each attempt spawns detached so the terminal
+// window's lifetime is independent from the daemon's process group.
+// We resolve as soon as the child process starts (not when it exits),
+// because terminals like xterm and x-terminal-emulator stay alive for
+// the duration of the interactive session — waiting for exit would time
+// out and kill the window mid-OAuth-flow.
 async function launchOnLinux(command: string): Promise<TerminalLaunchResult> {
   // Order matters: x-terminal-emulator is the Debian alternative that
   // resolves to whichever terminal the distro chose. Otherwise try the
@@ -64,7 +68,12 @@ async function launchOnLinux(command: string): Promise<TerminalLaunchResult> {
   const errors: string[] = [];
   for (const { bin, args } of attempts) {
     try {
-      await execFileAsync(bin, args, { timeout: 3_000 });
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(bin, args, { detached: true, stdio: 'ignore' });
+        child.unref();
+        child.once('spawn', resolve);
+        child.once('error', reject);
+      });
       return { ok: true, platform: 'linux', via: bin };
     } catch (err) {
       errors.push(`${bin}: ${err instanceof Error ? err.message : String(err)}`);
