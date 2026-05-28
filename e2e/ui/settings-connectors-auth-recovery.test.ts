@@ -131,7 +131,7 @@ async function openConnectorsSettings(
     statusResponse = () => ({
       github: pendingAuthorization
         ? { status: 'error', accountLabel: undefined }
-        : { status: CONNECTORS[0].status, accountLabel: undefined },
+        : { status: CONNECTORS[0]?.status ?? 'available', accountLabel: undefined },
       slack: { status: 'connected', accountLabel: 'design-team' },
     }),
     pendingAuthorization = null,
@@ -352,15 +352,18 @@ test.describe('Settings connectors auth recovery', () => {
 
 
   test('surfaces a connector error state when credentials have degraded', async ({ page }) => {
-    const degradedConnectors = [
+    const githubConnector = CONNECTORS[0];
+    const slackConnector = CONNECTORS[1];
+    if (!githubConnector || !slackConnector) throw new Error('missing connector fixtures');
+    const degradedConnectors: ConnectorFixture[] = [
       {
-        ...CONNECTORS[0],
-        status: 'error' as const,
+        ...githubConnector,
+        status: 'error',
         accountLabel: 'octo-user',
         lastError: 'GitHub token expired. Reconnect to continue.',
       },
-      CONNECTORS[1],
-    ] as const;
+      slackConnector,
+    ];
     const { dialog } = await openConnectorsSettings(page, {
       connectors: degradedConnectors,
     });

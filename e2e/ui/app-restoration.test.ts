@@ -2230,7 +2230,8 @@ test('sending another prompt while a run is active queues it and starts it after
   await expect(queuedStrip).toContainText('second queued prompt');
   expect(runCount).toBe(1);
 
-  releaseFirstRun();
+  const release: () => void = releaseFirstRun ?? (() => { throw new Error('first run release handle missing'); });
+  release();
 
   await expect.poll(() => runCount).toBe(2);
   await expect(queuedStrip).toHaveCount(0);

@@ -26,15 +26,15 @@ export type FakeAgentRuntimeOptions = {
 };
 
 const AGENT_BIN_NAMES: Record<FakeAgentId, string> = {
-  claude: 'claude-e2e.js',
-  codex: 'codex-e2e.js',
-  copilot: 'copilot-e2e.js',
-  'cursor-agent': 'cursor-agent-e2e.js',
-  deepseek: 'deepseek-e2e.js',
-  gemini: 'gemini-e2e.js',
-  opencode: 'opencode-e2e.js',
-  qoder: 'qodercli-e2e.js',
-  qwen: 'qwen-e2e.js',
+  claude: 'claude-e2e.cjs',
+  codex: 'codex-e2e.cjs',
+  copilot: 'copilot-e2e.cjs',
+  'cursor-agent': 'cursor-agent-e2e.cjs',
+  deepseek: 'deepseek-e2e.cjs',
+  gemini: 'gemini-e2e.cjs',
+  opencode: 'opencode-e2e.cjs',
+  qoder: 'qodercli-e2e.cjs',
+  qwen: 'qwen-e2e.cjs',
 };
 
 const AGENT_BIN_ENV_KEYS: Record<FakeAgentId, string> = {
@@ -84,7 +84,7 @@ export async function createFakeAgentRuntimes(
       : script;
     await writeFile(script, renderFakeAgentScript(agentId), 'utf8');
     if (process.platform === 'win32') {
-      await writeFile(bin, '@echo off\r\nnode "%~dp0%~n0.js" %*\r\n', 'utf8');
+      await writeFile(bin, '@echo off\r\nnode "%~dp0%~n0.cjs" %*\r\n', 'utf8');
     } else {
       await chmod(bin, 0o755);
     }
