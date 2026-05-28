@@ -110,6 +110,7 @@ export type WinPackResult = {
 };
 
 export type WinPackTiming = {
+  details?: Record<string, unknown>;
   durationMs: number;
   phase: string;
 };

@@ -184,6 +184,7 @@ function Get-BuildSegments {
     [ordered]@{
       phase = $_.phase
       durationMs = $_.durationMs
+      details = $_.details
     }
   })
 }
@@ -268,7 +269,14 @@ function Write-IndexAndSummary([string]$Status) {
     $summary += ""
     $summary += "### Build Segments"
     foreach ($segment in @($buildSegments | Sort-Object durationMs -Descending | Select-Object -First 12)) {
-      $summary += "- $($segment.phase): ``$(Format-Duration $segment.durationMs)``"
+      $detailText = ""
+      if ($segment.details -ne $null -and $segment.details.outputBytes -ne $null) {
+        $detailText = " output=$([Math]::Round($segment.details.outputBytes / 1MB, 1))MiB"
+      }
+      if ($segment.details -ne $null -and $segment.details.files -ne $null) {
+        $detailText = " files=$($segment.details.files) dirs=$($segment.details.directories) bytes=$([Math]::Round($segment.details.bytes / 1MB, 1))MiB maxPath=$($segment.details.maxPathLength)"
+      }
+      $summary += "- $($segment.phase): ``$(Format-Duration $segment.durationMs)``$detailText"
     }
   }
 

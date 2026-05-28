@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -709,12 +709,51 @@ export async function buildCustomWinNsisInstaller(
 ): Promise<WinPackTiming[]> {
   if (process.platform !== "win32") throw new Error("Windows installer build must run on Windows");
   const timings: WinPackTiming[] = [];
-  const runSegment = async <T>(phase: string, task: () => Promise<T>): Promise<T> => {
+  const runSegment = async <T>(
+    phase: string,
+    task: () => Promise<T>,
+    details: Record<string, unknown> = {},
+  ): Promise<T> => {
     const startedAt = Date.now();
     try {
       return await task();
     } finally {
-      timings.push({ durationMs: Date.now() - startedAt, phase });
+      timings.push({ details, durationMs: Date.now() - startedAt, phase });
+    }
+  };
+  const runExecSegment = async (
+    phase: string,
+    command: string,
+    args: string[],
+    options: { cwd: string; outputPath?: string },
+  ): Promise<void> => {
+    const startedAt = Date.now();
+    const details: Record<string, unknown> = {
+      args,
+      command,
+      cwd: options.cwd,
+    };
+    try {
+      const result = await execFileAsync(command, args, {
+        cwd: options.cwd,
+        windowsHide: true,
+      });
+      details.stdoutBytes = result.stdout.length;
+      details.stderrBytes = result.stderr.length;
+      details.stdoutTail = result.stdout.slice(-2000);
+      details.stderrTail = result.stderr.slice(-2000);
+      if (options.outputPath != null) {
+        details.outputBytes = (await stat(options.outputPath)).size;
+        details.outputPath = options.outputPath;
+      }
+      timings.push({ details, durationMs: Date.now() - startedAt, phase });
+    } catch (error) {
+      const failure = error as { code?: unknown; stderr?: unknown; stdout?: unknown };
+      details.code = failure.code;
+      details.stdoutTail = typeof failure.stdout === "string" ? failure.stdout.slice(-2000) : undefined;
+      details.stderrTail = typeof failure.stderr === "string" ? failure.stderr.slice(-2000) : undefined;
+      timings.push({ details, durationMs: Date.now() - startedAt, phase });
+      throw error;
     }
   };
   const makensisCommand = await runSegment("nsis:resolve-makensis", async () => resolveMakensisCommand(config));
@@ -729,34 +768,88 @@ export async function buildCustomWinNsisInstaller(
     await rm(paths.installerPayloadPath, { force: true });
     await rm(paths.setupPath, { force: true });
   });
+  const payloadSnapshotDetails: Record<string, unknown> = {};
+  await runSegment("nsis:payload-input-snapshot", async () => {
+    Object.assign(payloadSnapshotDetails, await collectPathSnapshot(builtApp.unpackedRoot));
+  }, payloadSnapshotDetails);
   await runSegment("nsis:payload-7z", async () => {
-    await execFileAsync(winResources.sevenZipExe, ["a", "-t7z", "-mx=1", "-ms=off", paths.installerPayloadPath, ".\\*"], {
-      cwd: builtApp.unpackedRoot,
-      windowsHide: true,
-    });
-    await stat(paths.installerPayloadPath);
+    await runExecSegment(
+      "nsis:payload-7z:process",
+      winResources.sevenZipExe,
+      ["a", "-t7z", "-mx=1", "-ms=off", paths.installerPayloadPath, ".\\*"],
+      { cwd: builtApp.unpackedRoot, outputPath: paths.installerPayloadPath },
+    );
   });
   await runSegment("nsis:write-script", async () => {
     await writeInstallerScript(config, paths);
   });
   await runSegment("nsis:makensis", async () => {
-    await execFileAsync(makensisCommand, [
-      "/V2",
-      `/DAPP_VERSION=${packagedVersion}`,
-      `/DOUTPUT_EXE=${paths.setupPath}`,
-      `/DPAYLOAD_7Z=${paths.installerPayloadPath}`,
-      `/DSEVEN_Z_EXE=${winResources.sevenZipExe}`,
-      `/DSEVEN_Z_DLL=${winResources.sevenZipDll}`,
-      `/DAPP_ICON=${paths.winIconPath}`,
-      `/DRUNNING_INSTANCES_PS1=${join(dirname(paths.installerScriptPath), "running-instances.ps1")}`,
-      paths.installerScriptPath,
-    ], {
-      cwd: dirname(paths.installerScriptPath),
-      windowsHide: true,
-    });
+    await runExecSegment(
+      "nsis:makensis:process",
+      makensisCommand,
+      [
+        "/V2",
+        `/DAPP_VERSION=${packagedVersion}`,
+        `/DOUTPUT_EXE=${paths.setupPath}`,
+        `/DPAYLOAD_7Z=${paths.installerPayloadPath}`,
+        `/DSEVEN_Z_EXE=${winResources.sevenZipExe}`,
+        `/DSEVEN_Z_DLL=${winResources.sevenZipDll}`,
+        `/DAPP_ICON=${paths.winIconPath}`,
+        `/DRUNNING_INSTANCES_PS1=${join(dirname(paths.installerScriptPath), "running-instances.ps1")}`,
+        paths.installerScriptPath,
+      ],
+      { cwd: dirname(paths.installerScriptPath), outputPath: paths.setupPath },
+    );
   });
   await runSegment("nsis:stat", async () => {
     await stat(paths.setupPath);
   });
   return timings;
+}
+
+async function collectPathSnapshot(root: string): Promise<Record<string, unknown>> {
+  const startedAt = Date.now();
+  let bytes = 0;
+  let directories = 0;
+  let files = 0;
+  let maxPathLength = root.length;
+  const errors: string[] = [];
+
+  async function visit(current: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+      directories += 1;
+      if (current.length > maxPathLength) maxPathLength = current.length;
+    } catch (error) {
+      if (errors.length < 8) errors.push(error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    for (const entry of entries) {
+      const child = join(current, entry.name);
+      if (child.length > maxPathLength) maxPathLength = child.length;
+      if (entry.isDirectory()) {
+        await visit(child);
+        continue;
+      }
+      files += 1;
+      try {
+        bytes += (await stat(child)).size;
+      } catch (error) {
+        if (errors.length < 8) errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+  }
+
+  await visit(root);
+  return {
+    bytes,
+    directories,
+    durationMs: Date.now() - startedAt,
+    errors,
+    files,
+    maxPathLength,
+    root,
+  };
 }
