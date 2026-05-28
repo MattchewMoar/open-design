@@ -1431,17 +1431,23 @@ Rules:
 - Only ask if a specific 🧪 Cases item is ⚠️ / ⚪ because of this missing secret -- otherwise it is noise.
 - This is a soft signal; maintainer decides whether to attach. Nothing happens automatically.
 
-### 📎 Needs (OPTIONAL -- soft request for private workspace files)
+### 📎 Needs (OPTIONAL -- soft request for private workspace files or run-config wiring)
 
-If proper verification required maintainer-provided context the PR / current workspace did not include, list it. The dashboard surfaces this so the maintainer can drop matching files into the Private Workspace before the next /explore. Format:
+If proper verification required maintainer-provided context or run configuration the PR / current workspace did not include, list it. The dashboard surfaces this so the maintainer can drop files into the Private Workspace or pre-wire env vars before the next /explore. Two sub-types are accepted in the same list:
 
+**File attachments** -- context or visual references the agent could not find in the PR:
 - \`<filename-suggestion>\`: <one-line purpose>
+
+**Env/config wiring** -- env vars the daemon reads at startup, used to point it at a fixture, stub, or binary:
+- \`<ENV_VAR_NAME>\`: <one-line purpose -- what it would unblock; do NOT emit a concrete path>
 
 Examples:
 - \`amr-cloud-auth-spec.md\`: clarifies token exchange flow not in PR; would let me verify spec compliance
 - \`expected-vela-row.png\`: visual reference for the AMR runtime picker
 - \`seed-projects.json\`: project data for state X needed by case Y
 - \`<missing-source-file-from-truncated-diff>\`: when diff was truncated and probe list is incomplete
+- \`FAKE_X_BIN\`: prewire to the fixture path so the positive path can run on next iteration
+- \`VELA_BIN\`: point to fake-vela.mjs fixture; unblocks runtime picker and login pill rendering
 
 Same rules as 🔑 Needs: only request if a specific case was blocked; reference the case in the purpose; no auto-action -- maintainer decides.
 
