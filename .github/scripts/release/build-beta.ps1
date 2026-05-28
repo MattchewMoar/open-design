@@ -79,6 +79,8 @@ git lfs version
 & $cargo --version
 & $makensis /VERSION
 
+Invoke-Node24 -Arguments @("pnpm.cmd", "install", "--frozen-lockfile")
+
 if ([string]::IsNullOrWhiteSpace($ReleaseVersion)) {
   git fetch --force --depth=1 origin "+refs/tags/open-design-v*:refs/tags/open-design-v*"
 
