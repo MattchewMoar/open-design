@@ -377,6 +377,53 @@ export async function runElectronBuilder(
     });
   });
   if (shouldBuildWinNsisInstaller(config.to) || shouldBuildWinPortableZip(config.to)) {
+    const signingCacheKey = resolveWinSigningCacheKey(config);
+    const nsisInstallerMaterialize = [
+      { from: "setup.exe", reuse: true, to: paths.setupPath },
+      { from: "payload.7z", reuse: true, to: paths.installerPayloadPath },
+    ];
+    const createNsisInstallerNode = (
+      materialized: WinBuiltAppManifest | null,
+      archiveSegments: WinPackTiming[],
+      ensureSignedUnpacked: () => Promise<void>,
+    ): CacheNode<{ createdAt: string; installerPath: string; payloadPath: string }> => ({
+      build: async ({ entryRoot }) => {
+        if (materialized == null) throw new Error("cannot build NSIS installer without materialized unpacked app");
+        await ensureSignedUnpacked();
+        archiveSegments.push(...await buildCustomWinNsisInstaller(config, paths, materialized));
+        await cp(paths.setupPath, join(entryRoot, "setup.exe"));
+        await cp(paths.installerPayloadPath, join(entryRoot, "payload.7z"));
+        return {
+          createdAt: new Date().toISOString(),
+          installerPath: paths.setupPath,
+          payloadPath: paths.installerPayloadPath,
+        };
+      },
+      id: "win.nsis-installer",
+      invalidate: async () => null,
+      key: hashJson({
+        archiveCacheVersion: WIN_ARCHIVE_CACHE_VERSION,
+        namespace: config.namespace,
+        packagedAppKey,
+        packagedVersion,
+        signing: signingCacheKey,
+        target: "nsis-installer",
+      }),
+      outputs: ["setup.exe", "payload.7z"],
+    });
+    if (shouldBuildWinNsisInstaller(config.to) && !shouldBuildWinPortableZip(config.to)) {
+      const nsisHitSegments: WinPackTiming[] = [];
+      const nsisHit = await runSegment("nsis-installer:read-hit", async () =>
+        cache.readHit({
+          materialize: nsisInstallerMaterialize,
+          node: createNsisInstallerNode(null, nsisHitSegments, async () => undefined),
+        })
+      );
+      if (nsisHit != null) {
+        segments.push(...nsisHitSegments);
+        return segments;
+      }
+    }
     const materialized = await runSegment("installer:materialize-unpacked", async () => {
       const materializedManifest = await cache.readHit({
         materialize: [{
@@ -400,7 +447,6 @@ export async function runElectronBuilder(
       }
       return materializeCachedUnpackedForInstaller(paths, packagedVersion);
     });
-    const signingCacheKey = resolveWinSigningCacheKey(config);
     let signedUnpacked = false;
     const ensureSignedUnpacked = async (): Promise<void> => {
       if (!config.signed || signedUnpacked) return;
@@ -442,36 +488,9 @@ export async function runElectronBuilder(
     if (shouldBuildWinNsisInstaller(config.to)) {
       const archiveSegments: WinPackTiming[] = [];
       await runSegment("nsis-installer:cache", async () => {
-        const node: CacheNode<{ createdAt: string; installerPath: string; payloadPath: string }> = {
-          build: async ({ entryRoot }) => {
-            await ensureSignedUnpacked();
-            archiveSegments.push(...await buildCustomWinNsisInstaller(config, paths, materialized));
-            await cp(paths.setupPath, join(entryRoot, "setup.exe"));
-            await cp(paths.installerPayloadPath, join(entryRoot, "payload.7z"));
-            return {
-              createdAt: new Date().toISOString(),
-              installerPath: paths.setupPath,
-              payloadPath: paths.installerPayloadPath,
-            };
-          },
-          id: "win.nsis-installer",
-          invalidate: async () => null,
-          key: hashJson({
-            archiveCacheVersion: WIN_ARCHIVE_CACHE_VERSION,
-            namespace: config.namespace,
-            packagedAppKey,
-            packagedVersion,
-            signing: signingCacheKey,
-            target: "nsis-installer",
-          }),
-          outputs: ["setup.exe", "payload.7z"],
-        };
         await cache.acquire({
-          materialize: [
-            { from: "setup.exe", reuse: true, to: paths.setupPath },
-            { from: "payload.7z", reuse: true, to: paths.installerPayloadPath },
-          ],
-          node,
+          materialize: nsisInstallerMaterialize,
+          node: createNsisInstallerNode(materialized, archiveSegments, ensureSignedUnpacked),
         });
       });
       segments.push(...archiveSegments);
