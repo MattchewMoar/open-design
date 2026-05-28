@@ -13,6 +13,8 @@ export const ko: Dict = {
   'chat.amrError.balanceMessage': 'AMR 잔액이 부족합니다. 충전하여 이 작업을 계속 진행하세요.',
   'chat.amrError.authorizeCta': '인증하고 재시도',
   'chat.amrError.rechargeCta': 'AMR 충전',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': '설치 명령 복사',
   'plugins.actions.copyPluginId': '플러그인 ID 복사',
   'plugins.actions.copyReadmeBadge': 'README 배지 복사',

@@ -13,6 +13,8 @@ export const ar: Dict = {
   'chat.amrError.balanceMessage': 'نفد رصيد AMR الخاص بك. اشحن للاستمرار في هذه المهمة.',
   'chat.amrError.authorizeCta': 'تفويض وإعادة المحاولة',
   'chat.amrError.rechargeCta': 'شحن AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'نسخ أمر التثبيت',
   'plugins.actions.copyPluginId': 'نسخ معرّف الإضافة',
   'plugins.actions.copyReadmeBadge': 'نسخ شارة README',

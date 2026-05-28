@@ -13,6 +13,8 @@ export const it: Dict = {
   'chat.amrError.balanceMessage': 'Il tuo saldo AMR è esaurito. Ricarica per continuare questa esecuzione.',
   'chat.amrError.authorizeCta': 'Autorizza e riprova',
   'chat.amrError.rechargeCta': 'Ricarica AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Copia comando di installazione',
   'plugins.actions.copyPluginId': 'Copia ID plugin',
   'plugins.actions.copyReadmeBadge': 'Copia badge README',

@@ -13,6 +13,8 @@ export const fa: Dict = {
   'chat.amrError.balanceMessage': 'موجودی AMR شما تمام شده است. برای ادامه این اجرا شارژ کنید.',
   'chat.amrError.authorizeCta': 'اعطای دسترسی و تلاش مجدد',
   'chat.amrError.rechargeCta': 'شارژ AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'کپی دستور نصب',
   'plugins.actions.copyPluginId': 'کپی شناسهٔ افزونه',
   'plugins.actions.copyReadmeBadge': 'کپی نشان README',

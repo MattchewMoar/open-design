@@ -207,6 +207,8 @@ import { narrowProjectCritiqueOverride } from './critique/spawn-inputs.js';
 import { createCopilotStreamHandler } from './copilot-stream.js';
 import { createJsonEventStreamHandler } from './json-event-stream.js';
 import {
+  antigravityAuthGuidance,
+  antigravityQuotaGuidance,
   classifyAgentAuthFailure,
   classifyAgentServiceFailure,
   cursorAuthGuidance,
@@ -2303,6 +2305,40 @@ export function telemetryPromptFromRunRequest(message, currentPrompt) {
 
 const FORM_ANSWERS_HEADER_RE = /^\s*\[form answers\s+(?:\u2014|-)\s*([^\]\r\n]+)\]/i;
 
+// Aggressive OVERRIDE for weak / medium-strength plain agents (e.g.
+// GPT-OSS-120B Medium, Gemini 3.5 Flash) that otherwise echo RULE 1's
+// fenced form example back at the user on follow-up turns even when
+// they correctly understand the form is answered. Strong models
+// (Claude Sonnet 4.6, Gemini 3.1 Pro) already handle a shorter
+// OVERRIDE; enumerating the anti-patterns is a no-op for them and a
+// strong suppressor for the weaker ones. RULE 1 itself stays in the
+// system prompt so turn 1 can still emit a valid form.
+//
+// Exported so tests pin both the trigger condition and the literal
+// anti-patterns we ask the model to skip \u2014 silently weakening the
+// list (e.g. dropping the markdown-fence ban) would reintroduce the
+// form-echo regression on GPT-OSS / Gemini Flash.
+export const FORM_ANSWERED_SYSTEM_OVERRIDE = `## OVERRIDE \u2014 form already answered (this is turn 2 or later)
+
+The user already submitted their form answers (see # User request below).
+RULE 1 documents the turn-1 ask flow; that flow is finished. Treat RULE 1
+as read-only documentation for this turn \u2014 do not execute any of it.
+
+Forbidden output for this turn:
+- A \`<question-form>\` tag of any id, including \`discovery\` or \`task-type\`.
+- A markdown \`\`\`json fenced block echoing the form schema or example.
+- Form-asking prose such as "Got it \u2014 tell me the following" or
+  "\u8bf7\u544a\u8bc9\u6211\u4ee5\u4e0b\u4fe1\u606f".
+- Narrating fake system events such as "subagents stopped" or
+  "server restart".
+
+Required output for this turn:
+- Open with a brief prose confirmation of what the brief is.
+- Then proceed to RULE 2 (branch on the submitted \`brand\` value) and
+  RULE 3 (emit the \`<artifact>\` block with the full HTML document).
+
+`;
+
 function formAnswerTransitionForCurrentPrompt(currentPrompt) {
   if (typeof currentPrompt !== 'string') return null;
   const trimmed = currentPrompt.trim();
@@ -2329,13 +2365,30 @@ function formAnswerTransitionForCurrentPrompt(currentPrompt) {
   return lines.join('\n');
 }
 
-export function composeChatUserRequestForAgent(message, currentPrompt) {
+export function composeChatUserRequestForAgent(
+  message,
+  currentPrompt,
+  options: { skipTranscript?: boolean } = {},
+) {
+  // When the adapter resumes its own session (today: `agy -c`), the
+  // daemon-rendered `## user` / `## assistant` transcript is a duplicate
+  // of what the upstream CLI already has in memory — and the embedded
+  // copy carries the literal `<question-form>` markup the agent emitted
+  // on turn 1, which the model then re-emits on turn 2. Send only the
+  // latest user turn (`currentPrompt`) in that case; the upstream
+  // session memory provides the rest. See
+  // `RuntimeAgentDef.resumesSessionViaCli`.
+  const skip = options.skipTranscript === true;
+  const bodySource = skip ? currentPrompt : message;
   const body =
-    typeof message === 'string' && message.trim()
-      ? message
+    typeof bodySource === 'string' && bodySource.trim()
+      ? bodySource
       : '(No extra typed instruction.)';
   const transition = formAnswerTransitionForCurrentPrompt(currentPrompt);
   if (!transition) return body;
+  if (skip) {
+    return [transition, body].join('\n\n');
+  }
   return [
     transition,
     '## Full conversation transcript',
@@ -4176,6 +4229,42 @@ export async function startServer({
   // with shell access to the daemon machine should be the only
   // one allowed to invoke. Returns the pre-purge stats so the
   // caller can confirm what they discarded.
+  // PR #3157: surface the Antigravity OAuth flow as a one-click action
+  // in the chat's AGENT_AUTH_REQUIRED banner. agy's `-p` print mode
+  // can't complete the Google Sign-In flow on its own (no input field
+  // for the auth code), so OD opens a system Terminal running `agy`
+  // for the user; they finish OAuth there, then retry the chat. The
+  // endpoint is loopback-gated and only supports antigravity because
+  // (a) we hardcode `agy` as the command, and (b) opening a new
+  // Terminal window is a visible side effect we don't want anyone
+  // hand-rolling for every agent that ships a CLI.
+  app.post('/api/agents/:agentId/oauth-launch', requireLocalDaemonRequest, async (req, res) => {
+    const agentId = req.params.agentId;
+    if (agentId !== 'antigravity') {
+      return res.status(400).json({
+        ok: false,
+        error: `oauth-launch is only supported for antigravity, got ${agentId}`,
+      });
+    }
+    try {
+      const { launchAgentInSystemTerminal } = await import('./runtimes/terminal-launch.js');
+      const result = await launchAgentInSystemTerminal('agy');
+      if (result.ok) {
+        return res.json({ ok: true, platform: result.platform, via: result.via });
+      }
+      return res.status(500).json({
+        ok: false,
+        platform: result.platform,
+        error: result.reason,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        ok: false,
+        error: String(err),
+      });
+    }
+  });
+
   app.post('/api/plugins/events/purge', requireLocalDaemonRequest, async (_req, res) => {
     try {
       const { purgePluginEventBuffer } = await import('./plugins/events.js');
@@ -10674,6 +10763,7 @@ export async function startServer({
     const userRequestPrompt = composeChatUserRequestForAgent(
       message,
       currentPrompt,
+      { skipTranscript: def.resumesSessionViaCli === true },
     );
     const clientInstructionPrompt = [researchCommandContract, runContextPrompt, systemPrompt]
       .map((part) => (typeof part === 'string' ? part.trim() : ''))
@@ -10698,7 +10788,7 @@ export async function startServer({
       typeof currentPrompt === 'string' ? currentPrompt : '',
     );
     const formOverride = formAlreadyAnswered
-      ? '## OVERRIDE — form already answered\nThe user has already submitted their form answers (see # User request below). Do NOT emit any `<question-form>` tag. RULE 1 does NOT apply — the discovery/task-type form is done. Proceed to RULE 2 / RULE 3 and build the artifact.\n\n'
+      ? FORM_ANSWERED_SYSTEM_OVERRIDE
       : '';
     const composed = [
       instructionPrompt
@@ -10984,12 +11074,47 @@ export async function startServer({
       }
     }
 
+    // Plain-streaming adapters that own a "continue most recent
+    // conversation" CLI flag (today: only `agy -c`) read this signal
+    // to resume upstream session state on follow-up turns. The query
+    // matches any persisted assistant message in the same conversation
+    // EXCEPT the placeholder row this run just inserted (it's still
+    // `pending` and has no body — counting it as prior would always
+    // force `-c` on the very first turn). Adapters that don't consume
+    // this field ignore it.
+    const hasPriorAssistantTurn = run.conversationId
+      ? Boolean(
+          db
+            .prepare(
+              `SELECT 1 FROM messages
+               WHERE conversation_id = ?
+                 AND role = 'assistant'
+                 AND COALESCE(content, '') <> ''
+                 AND id <> COALESCE(?, '')
+               LIMIT 1`,
+            )
+            .get(run.conversationId, run.assistantMessageId ?? ''),
+        )
+      : false;
+
+    // Antigravity's `agy` is silent on stdout/stderr in print mode for
+    // both auth-missing and quota-exhausted failures — the actual
+    // RESOURCE_EXHAUSTED / "not logged in" payload only surfaces in
+    // its `--log-file`. We allocate a per-run temp path, pipe agy's
+    // log to it via buildArgs, then read it in the empty-output guard
+    // to disambiguate the silent-failure cause. Other adapters ignore
+    // this field.
+    const agentLogFilePath =
+      def.id === 'antigravity'
+        ? path.join(os.tmpdir(), `od-agy-${run.id}.log`)
+        : undefined;
+
     const args = def.buildArgs(
       composed,
       safeImages,
       extraAllowedDirs,
       agentOptions,
-      { cwd: effectiveCwd },
+      { cwd: effectiveCwd, hasPriorAssistantTurn, agentLogFilePath },
     );
 
     // Second-pass budget check that knows about the Windows `.cmd` shim
@@ -11794,7 +11919,7 @@ export async function startServer({
       send('error', createSseErrorPayload('AGENT_EXECUTION_FAILED', err.message));
       design.runs.finish(run, 'failed', 1, null);
     });
-    child.on('close', (code, signal) => {
+    child.on('close', async (code, signal) => {
       clearInactivityWatchdog();
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
@@ -11846,24 +11971,93 @@ export async function startServer({
         ));
         return design.runs.finish(run, 'failed', code, signal);
       }
+      // Plain-stream auth-failure guard: plain adapters (today
+      // antigravity, deepseek's TUI variants) may exit cleanly with
+      // visible stdout that's actually an auth prompt — agy prints
+      // "Authentication required. Please visit the URL to log in:
+      // <URL>" + "Error: authentication timed out." rather than
+      // failing with a non-zero exit. Without this guard the chat
+      // shows that raw prompt as the agent's "reply", and the user
+      // has no way to actually complete OAuth from inside the chat.
+      // Override the apparent success with a proper
+      // AGENT_AUTH_REQUIRED error carrying actionable guidance.
+      if (
+        code === 0 &&
+        !run.cancelRequested &&
+        !trackingSubstantiveOutput &&
+        childStdoutSeen
+      ) {
+        const authFailure = classifyAgentAuthFailure(
+          agentId,
+          `${agentStderrTail}\n${agentStdoutTail}`,
+        );
+        if (authFailure?.status === 'missing') {
+          send('error', createSseErrorPayload(
+            'AGENT_AUTH_REQUIRED',
+            authFailure.message ?? `${def.name} authentication required. Please re-authenticate and retry.`,
+            { retryable: true },
+          ));
+          return design.runs.finish(run, 'failed', 0, signal);
+        }
+      }
       // Plain-stream empty-output guard: plain agents send raw stdout
       // chunks without structured event tracking. Detect auth failures
-      // or silent empty responses when exit 0 but no stdout was seen.
+      // and quota / upstream errors when exit 0 but no stdout was
+      // seen. agy in print mode is silent on stdout/stderr for both
+      // missing-auth AND quota-exhausted failures; the daemon piped
+      // agy's `--log-file` to `agentLogFilePath` precisely so this
+      // guard can grep the upstream error code (RESOURCE_EXHAUSTED 429
+      // for quota, "not logged into Antigravity" for auth) and route
+      // to the right user-facing guidance.
       if (
         code === 0 &&
         !run.cancelRequested &&
         !trackingSubstantiveOutput &&
         !childStdoutSeen
       ) {
-        const authFailure = classifyAgentAuthFailure(
-          agentId,
-          `${agentStderrTail}\n${agentStdoutTail}`,
-        );
+        let combinedDetail = `${agentStderrTail}\n${agentStdoutTail}`;
+        if (def.id === 'antigravity' && agentLogFilePath) {
+          try {
+            const logContent = await fs.promises.readFile(agentLogFilePath, 'utf8');
+            // Keep the last 8 KB — quota / auth lines all land near the
+            // tail (after the spawn / model-config preamble).
+            combinedDetail = `${combinedDetail}\n${logContent.slice(-8192)}`;
+          } catch {
+            // Missing log file (agy didn't write it, mounted tmpfs is
+            // read-only, etc.) is fine — fall through to the generic
+            // empty-output message.
+          }
+          // Best-effort cleanup so /tmp doesn't accrue per-run logs.
+          fs.promises.unlink(agentLogFilePath).catch(() => {});
+        }
+        const authFailure = classifyAgentAuthFailure(agentId, combinedDetail);
+        const serviceFailure = !authFailure
+          ? classifyAgentServiceFailure(combinedDetail)
+          : null;
+        const isAntigravityQuota =
+          def.id === 'antigravity' && serviceFailure === 'RATE_LIMITED';
+        // Antigravity-only fallback: if neither classifier matched but
+        // the run was silent, lean on the empirical observation that
+        // an empty agy print-mode exit almost always means
+        // missing-OAuth (the only other silent path is quota, which
+        // the log-file check above already caught).
+        const useAntigravityAuthFallback =
+          !authFailure && !serviceFailure && def.id === 'antigravity';
+        const errorCode =
+          authFailure || useAntigravityAuthFallback
+            ? 'AGENT_AUTH_REQUIRED'
+            : isAntigravityQuota
+              ? 'RATE_LIMITED'
+              : 'AGENT_EXECUTION_FAILED';
         const msg = authFailure
           ? authFailure.message ?? `${def.name} authentication expired. Please re-authenticate and retry.`
-          : `${def.name} returned an empty response. This may indicate an expired session — try re-authenticating the agent.`;
+          : isAntigravityQuota
+            ? antigravityQuotaGuidance()
+            : useAntigravityAuthFallback
+              ? antigravityAuthGuidance()
+              : `${def.name} returned an empty response. This may indicate an expired session — try re-authenticating the agent.`;
         send('error', createSseErrorPayload(
-          authFailure ? 'AGENT_AUTH_REQUIRED' : 'AGENT_EXECUTION_FAILED',
+          errorCode,
           msg,
           { retryable: true },
         ));

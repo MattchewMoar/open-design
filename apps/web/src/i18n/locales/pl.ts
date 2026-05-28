@@ -13,6 +13,8 @@ export const pl: Dict = {
   'chat.amrError.balanceMessage': 'Saldo AMR zostało wyczerpane. Doładuj, aby kontynuować zadanie.',
   'chat.amrError.authorizeCta': 'Autoryzuj i ponów',
   'chat.amrError.rechargeCta': 'Doładuj AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Kopiuj polecenie instalacji',
   'plugins.actions.copyPluginId': 'Kopiuj ID wtyczki',
   'plugins.actions.copyReadmeBadge': 'Kopiuj odznakę README',

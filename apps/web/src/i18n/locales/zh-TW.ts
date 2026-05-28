@@ -13,6 +13,8 @@ export const zhTW: Dict = {
   'chat.amrError.balanceMessage': "AMR 帳戶餘額不足。儲值後即可繼續執行目前任務。",
   'chat.amrError.authorizeCta': "授權並重試",
   'chat.amrError.rechargeCta': "前往儲值",
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': '複製安裝命令',
   'plugins.actions.copyPluginId': '複製外掛 ID',
   'plugins.actions.copyReadmeBadge': '複製 README 徽章',

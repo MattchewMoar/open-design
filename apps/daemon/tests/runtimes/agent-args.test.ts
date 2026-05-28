@@ -1,7 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'vitest';
 import {
-  aider, antigravity, assert, claude, codex, copilot, cursorAgent, deepseek, devin, detectAgents, gemini, join, kilo, kiro, mkdtempSync, opencode, pi, qoder, qwen, rmSync, spawnEnvForAgent, tmpdir, vibe, writeFileSync, chmodSync,
+  AGENT_DEFS, aider, antigravity, assert, claude, codex, copilot, cursorAgent, deepseek, devin, detectAgents, gemini, join, kilo, kiro, mkdtempSync, opencode, pi, qoder, qwen, rmSync, spawnEnvForAgent, tmpdir, vibe, writeFileSync, chmodSync,
 } from './helpers/test-helpers.js';
+import { writeAntigravityModelSelection } from '../../src/runtimes/defs/antigravity.js';
 import type { TestAgentDef } from './helpers/test-helpers.js';
 
 test('cursor-agent args deliver prompts via stdin without passing a literal dash prompt', () => {
@@ -456,19 +458,136 @@ test('antigravity pipes prompt via stdin with -p - sentinel', () => {
   assert.equal(antigravity.streamFormat, 'plain');
   assert.equal(antigravity.promptViaStdin, true);
 
-  const args = antigravity.buildArgs('write hello world', [], [], {});
+  const args = antigravity.buildArgs('write hello world', [], [], {}, {});
   assert.deepEqual(args, ['-p', '-']);
 
-  const withModel = antigravity.buildArgs('hi', [], [], { model: 'gemini-3-pro' });
+  // No `--model` flag exists upstream, so buildArgs argv must stay the
+  // same regardless of which label the user picks.
+  const withModel = antigravity.buildArgs('hi', [], [], {
+    model: 'Gemini 3.1 Pro (High)',
+  }, {});
   assert.equal(withModel.includes('--model'), false);
   assert.deepEqual(withModel, ['-p', '-']);
 
+  // Argv must NOT carry `-c` even on follow-up turns. We tested resume
+  // mode and found agy's `-c` activates an internal agentic loop (tool
+  // calls, retries, fallback-to-cached-response) that overrides OD's
+  // system-prompt OVERRIDE — producing byte-identical form re-emissions
+  // on turn 2. The stateless path + sanitized transcript injection is
+  // what actually breaks the discovery loop. Pin both shapes so a
+  // future contributor doesn't silently reintroduce `-c` and hit the
+  // same regression.
+  const followUp = antigravity.buildArgs('next message', [], [], {}, {
+    hasPriorAssistantTurn: true,
+  });
+  assert.deepEqual(followUp, ['-p', '-']);
+  assert.equal(followUp.includes('-c'), false);
+
+  const firstTurn = antigravity.buildArgs('first', [], [], {}, {
+    hasPriorAssistantTurn: false,
+  });
+  assert.deepEqual(firstTurn, ['-p', '-']);
+  assert.equal(antigravity.resumesSessionViaCli, undefined);
+
   assert.equal(antigravity.maxPromptArgBytes, undefined);
 
+  // Picker exposes the synthetic Default + the 8 labels agy's TUI
+  // Switch-Model surfaces for consumer-tier accounts. The set is small
+  // enough to ship statically; revisit when upstream adds an `agy
+  // models` subcommand (also tracked under issue #35).
   assert.deepEqual(
     antigravity.fallbackModels.map((m) => m.id),
-    ['default'],
+    [
+      'default',
+      'Gemini 3.1 Pro (High)',
+      'Gemini 3.1 Pro (Low)',
+      'Gemini 3.5 Flash (High)',
+      'Gemini 3.5 Flash (Medium)',
+      'Gemini 3.5 Flash (Low)',
+      'Claude Sonnet 4.6 (Thinking)',
+      'Claude Opus 4.6 (Thinking)',
+      'GPT-OSS 120B (Medium)',
+    ],
   );
+
+  // `agy` v1.0.3 has no `--model` flag (upstream #35), no `models`
+  // subcommand, and no `/model` slash command — a user-typed model id
+  // would be silently ignored at spawn, looking like an OD bug. The
+  // settings UI hides the "Custom (fill below)" option when this is
+  // `false`. Remove this opt-out once upstream wires #35.
+  assert.equal(antigravity.supportsCustomModel, false);
+});
+
+// `agy` reads `~/.gemini/antigravity-cli/settings.json` on every CLI
+// startup — verified by capturing the `--log-file` line `Propagating
+// selected model override to backend: label=…`. Routing OD's model
+// picker through that file lets the user choose a model from Settings
+// even though agy has no `--model` flag (upstream issue #35).
+//
+// Two behaviors must hold and are pinned here:
+//
+//   1. Picking "default" must NOT touch settings.json — respect the
+//      label the user previously set inside agy's own TUI.
+//   2. Picking a concrete label must write that exact string into the
+//      `model` field while preserving every other key (e.g.
+//      `trustedWorkspaces` that agy populates on first-run consent).
+test('antigravity persists model selection to agy settings.json', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'od-antigravity-settings-'));
+  try {
+    const settingsPath = join(dir, 'settings.json');
+
+    // 1. Pre-seed the file as agy would after onboarding: a model label
+    //    plus a trustedWorkspaces array the user has already consented to.
+    writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          model: 'GPT-OSS 120B (Medium)',
+          trustedWorkspaces: ['/tmp/od-project'],
+        },
+        null,
+        2,
+      ),
+    );
+
+    // 2. Write a new label and assert the model swap + trusted list intact.
+    writeAntigravityModelSelection('Gemini 3.1 Pro (High)', settingsPath);
+    const after = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    assert.equal(after.model, 'Gemini 3.1 Pro (High)');
+    assert.deepEqual(after.trustedWorkspaces, ['/tmp/od-project']);
+
+    // 3. When the file doesn't exist (fresh install before onboarding),
+    //    we must create it rather than crash the spawn pipeline.
+    const freshPath = join(dir, 'fresh', 'settings.json');
+    writeAntigravityModelSelection('Claude Sonnet 4.6 (Thinking)', freshPath);
+    assert.ok(existsSync(freshPath));
+    assert.equal(
+      JSON.parse(readFileSync(freshPath, 'utf8')).model,
+      'Claude Sonnet 4.6 (Thinking)',
+    );
+
+    // 4. When the existing file is corrupt JSON, we must rewrite it from
+    //    scratch instead of leaving agy with an unparseable settings file.
+    const corruptPath = join(dir, 'corrupt-settings.json');
+    writeFileSync(corruptPath, '{not valid json');
+    writeAntigravityModelSelection('Gemini 3.5 Flash (Low)', corruptPath);
+    const recovered = JSON.parse(readFileSync(corruptPath, 'utf8'));
+    assert.equal(recovered.model, 'Gemini 3.5 Flash (Low)');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// AMR routes model selection through ACP `session/set_model` and only
+// accepts ids that survive the live `vela models` preflight, so a free
+// text id silently fails at spawn. Same custom-model opt-out shape as
+// antigravity — the declarative `supportsCustomModel: false` on the
+// def is the single source of truth the settings UI consults, and the
+// fallback "Custom" item should not appear in the model picker.
+test('amr opts out of the Custom-model picker option', () => {
+  const amr = AGENT_DEFS.find((a) => a.id === 'amr');
+  assert.ok(amr, 'amr def must remain registered');
+  assert.equal(amr.supportsCustomModel, false);
 });
 
 test('kiro fetchModels falls back to fallbackModels when detection fails', async () => {

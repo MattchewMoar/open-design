@@ -13,6 +13,8 @@ export const esES: Dict = {
   'chat.amrError.balanceMessage': 'Tu saldo de AMR se ha agotado. Recarga para continuar esta ejecución.',
   'chat.amrError.authorizeCta': 'Autorizar y reintentar',
   'chat.amrError.rechargeCta': 'Recargar AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Copiar comando de instalación',
   'plugins.actions.copyPluginId': 'Copiar ID del plugin',
   'plugins.actions.copyReadmeBadge': 'Copiar insignia README',

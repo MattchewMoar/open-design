@@ -13,6 +13,8 @@ export const fr: Dict = {
   'chat.amrError.balanceMessage': 'Votre solde AMR est épuisé. Rechargez pour poursuivre cette exécution.',
   'chat.amrError.authorizeCta': 'Autoriser et relancer',
   'chat.amrError.rechargeCta': 'Recharger AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Copier la commande d’installation',
   'plugins.actions.copyPluginId': 'Copier l’ID du plugin',
   'plugins.actions.copyReadmeBadge': 'Copier le badge README',

@@ -11,6 +11,8 @@ export const zhCN: Dict = {
   'chat.amrError.balanceMessage': "AMR 账户余额不足。充值后可继续运行当前任务。",
   'chat.amrError.authorizeCta': "授权并重试",
   'chat.amrError.rechargeCta': "前往充值",
+  'chat.antigravityError.launchTerminalCta': "在终端中登录",
+  'chat.antigravityError.launchSwitchModelCta': "在终端中切换模型",
   'common.cancel': '取消',
   'common.save': '保存',
   'common.close': '关闭',

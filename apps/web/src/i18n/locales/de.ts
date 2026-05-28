@@ -13,6 +13,8 @@ export const de: Dict = {
   'chat.amrError.balanceMessage': 'Dein AMR-Guthaben ist aufgebraucht. Lade auf, um diesen Lauf fortzusetzen.',
   'chat.amrError.authorizeCta': 'Autorisieren und wiederholen',
   'chat.amrError.rechargeCta': 'AMR aufladen',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Installationsbefehl kopieren',
   'plugins.actions.copyPluginId': 'Plugin-ID kopieren',
   'plugins.actions.copyReadmeBadge': 'README-Badge kopieren',

@@ -13,6 +13,8 @@ export const uk: Dict = {
   'chat.amrError.balanceMessage': 'Баланс AMR вичерпано. Поповніть, щоб продовжити це виконання.',
   'chat.amrError.authorizeCta': 'Авторизувати та повторити',
   'chat.amrError.rechargeCta': 'Поповнити AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Скопіювати команду встановлення',
   'plugins.actions.copyPluginId': 'Скопіювати ID плагіна',
   'plugins.actions.copyReadmeBadge': 'Скопіювати бейдж README',

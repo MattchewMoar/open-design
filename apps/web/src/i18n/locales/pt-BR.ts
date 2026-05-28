@@ -13,6 +13,8 @@ export const ptBR: Dict = {
   'chat.amrError.balanceMessage': 'Seu saldo AMR acabou. Recarregue para continuar esta execução.',
   'chat.amrError.authorizeCta': 'Autorizar e tentar novamente',
   'chat.amrError.rechargeCta': 'Recarregar AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Copiar comando de instalação',
   'plugins.actions.copyPluginId': 'Copiar ID do plugin',
   'plugins.actions.copyReadmeBadge': 'Copiar selo do README',

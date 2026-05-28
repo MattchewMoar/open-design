@@ -11,6 +11,8 @@ export const en: Dict = {
   'chat.amrError.balanceMessage': "Your AMR balance has run out. Top up to keep this run going.",
   'chat.amrError.authorizeCta': "Authorize & retry",
   'chat.amrError.rechargeCta': "Top up AMR",
+  'chat.antigravityError.launchTerminalCta': "Sign in via terminal",
+  'chat.antigravityError.launchSwitchModelCta': "Switch model in terminal",
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'common.close': 'Close',

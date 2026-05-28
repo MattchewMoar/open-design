@@ -13,6 +13,8 @@ export const tr: Dict = {
   'chat.amrError.balanceMessage': 'AMR bakiyeniz bitti. Çalıştırmaya devam etmek için bakiye yükleyin.',
   'chat.amrError.authorizeCta': 'Yetkilendir ve yeniden dene',
   'chat.amrError.rechargeCta': 'AMR bakiyesi yükle',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Kurulum komutunu kopyala',
   'plugins.actions.copyPluginId': 'Eklenti ID’sini kopyala',
   'plugins.actions.copyReadmeBadge': 'README rozetini kopyala',

@@ -13,6 +13,8 @@ export const id: Dict = {
   'chat.amrError.balanceMessage': 'Saldo AMR Anda habis. Isi ulang untuk melanjutkan proses ini.',
   'chat.amrError.authorizeCta': 'Otorisasi & coba lagi',
   'chat.amrError.rechargeCta': 'Isi ulang AMR',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Salin perintah instal',
   'plugins.actions.copyPluginId': 'Salin ID plugin',
   'plugins.actions.copyReadmeBadge': 'Salin lencana README',

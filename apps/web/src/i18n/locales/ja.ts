@@ -13,6 +13,8 @@ export const ja: Dict = {
   'chat.amrError.balanceMessage': 'AMR の残高が不足しています。チャージしてこのタスクを続行してください。',
   'chat.amrError.authorizeCta': '認可して再試行',
   'chat.amrError.rechargeCta': 'AMR にチャージ',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'インストールコマンドをコピー',
   'plugins.actions.copyPluginId': 'プラグイン ID をコピー',
   'plugins.actions.copyReadmeBadge': 'README バッジをコピー',

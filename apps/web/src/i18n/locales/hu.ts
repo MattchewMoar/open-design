@@ -13,6 +13,8 @@ export const hu: Dict = {
   'chat.amrError.balanceMessage': 'Az AMR-egyenleged elfogyott. Tölts fel a futtatás folytatásához.',
   'chat.amrError.authorizeCta': 'Engedélyezés és újrapróbálkozás',
   'chat.amrError.rechargeCta': 'AMR feltöltése',
+  'chat.antigravityError.launchTerminalCta': 'Sign in via terminal',
+  'chat.antigravityError.launchSwitchModelCta': 'Switch model in terminal',
   'plugins.actions.copyInstallCommand': 'Telepítési parancs másolása',
   'plugins.actions.copyPluginId': 'Pluginazonosító másolása',
   'plugins.actions.copyReadmeBadge': 'README jelvény másolása',
