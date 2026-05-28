@@ -1932,7 +1932,7 @@ function scanRunEventsForFinishedProps(events, reqBodyModel) {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const ev = events[i];
     const data = ev?.data;
-    if (ev?.event === 'agent' && data?.type === 'usage' && data.usage) {
+    if (ev?.event === 'agent' && data?.type === 'usage' && data.usage && !haveUsageTokens) {
       const u = data.usage;
       if (typeof u.input_tokens === 'number') inputTokens = u.input_tokens;
       if (typeof u.output_tokens === 'number') outputTokens = u.output_tokens;

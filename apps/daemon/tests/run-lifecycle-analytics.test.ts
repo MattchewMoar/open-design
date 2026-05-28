@@ -106,4 +106,20 @@ describe('scanRunEventsForFinishedProps', () => {
     expect(result.inputTokens).toBeUndefined();
     expect(result.outputTokens).toBeUndefined();
   });
+
+  it('uses terminal usage event tokens when multiple usage events exist', () => {
+    // Multi-step/multi-turn runs emit one usage event per step/turn (json-event-stream,
+    // pi-rpc). Reverse scan hits the terminal (highest-index) usage first; the
+    // !haveUsageTokens guard must prevent earlier usage events from overwriting those values
+    // while the loop continues scanning back for agentReportedModel.
+    const events = [
+      initializingEvent('claude-opus-4'),
+      usageEvent(100, 200), // step 1 — must NOT overwrite terminal values
+      usageEvent(500, 750), // terminal turn — seen first in reverse, values must survive
+    ];
+    const result = __forTestScanRunEventsForFinishedProps(events, '');
+    expect(result.agentReportedModel).toBe('claude-opus-4');
+    expect(result.inputTokens).toBe(500);
+    expect(result.outputTokens).toBe(750);
+  });
 });
