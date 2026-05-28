@@ -35,7 +35,14 @@ const verifyViolentUpdater = process.env.OD_PACKAGED_E2E_WIN_UPDATER_VIOLENT !==
 const verifyRealUpdateInstaller = process.env.OD_PACKAGED_E2E_WIN_REAL_UPDATE_INSTALL === '1';
 const releaseChannel = process.env.OD_PACKAGED_E2E_RELEASE_CHANNEL;
 const releaseVersion = process.env.OD_PACKAGED_E2E_RELEASE_VERSION;
-const updateScenario = resolvePackagedUpdateScenario({ releaseChannel, releaseVersion });
+const updateScenario: PackagedUpdateScenario = verifyCoreOnly
+  ? {
+      channel: 'beta',
+      currentVersionOverride: null,
+      expectedCurrentVersion: releaseVersion ?? '99.0.0-beta.0',
+      fixtureVersion: '',
+    }
+  : resolvePackagedUpdateScenario({ releaseChannel, releaseVersion });
 const installIdentity = resolvePackagedWinInstallIdentity({ namespace, releaseVersion });
 const toolsPackReleaseVersionArgs = releaseAppVersionArgs(releaseVersion);
 const violentArtifactBytes = Number.parseInt(process.env.OD_PACKAGED_E2E_WIN_UPDATER_BYTES ?? `${16 * 1024 * 1024}`, 10);
