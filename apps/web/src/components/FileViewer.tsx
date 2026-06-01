@@ -6590,10 +6590,13 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
   }, [canShare, file.name, projectId]);
 
   // Chat-side "Share" next-step action: when a new share request arrives, open
-  // the share/export (download) menu — the same surface the export-ready nudge
-  // points at. The artifact source may still be loading when the request lands
-  // (the file was just auto-opened), so we defer until `canShare` flips true
-  // and only consume each nonce once.
+  // the share menu (the toolbar's "Share" button → deploy menu, which holds the
+  // share-link items AND the "publish online" providers). This is the right
+  // surface for "share" — publishing is the prerequisite for a shareable link,
+  // and that publish step lives here; the download menu is export-to-disk, a
+  // different intent. The artifact source may still be loading when the request
+  // lands (the file was just auto-opened), so we defer until `canShare` flips
+  // true and only consume each nonce once.
   const consumedShareNonceRef = useRef<number | null>(null);
   useEffect(() => {
     const nonce = shareRequest?.nonce;
@@ -6603,8 +6606,8 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
     consumedShareNonceRef.current = nonce;
     setExportReadyNudge(false);
     markExportReadyNudgeSeen(projectId, file.name);
-    setDeployMenuOpen(false);
-    setDownloadMenuOpen(true);
+    setDownloadMenuOpen(false);
+    setDeployMenuOpen(true);
   }, [shareRequest?.nonce, canShare, projectId, file.name]);
 
   const openDownloadMenu = () => {
