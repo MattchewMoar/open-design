@@ -320,6 +320,8 @@ export const ptBR: Dict = {
     'Buscado na CLI quando ela expõe um comando `models`. "Padrão" deixa a escolha para a configuração da própria CLI; "Personalizado…" permite digitar qualquer id de modelo aceito pela CLI.',
   'settings.modelPickerLiveHint':
     'Os modelos foram atualizados a partir da CLI instalada. O padrão ainda usa a configuração da CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Os modelos foram atualizados a partir da CLI instalada.',
   'settings.modelPickerFallbackHint':
     'Mostrando padrões integrados. Clique em Reescanear para buscar modelos ao vivo da CLI.',
   'settings.cliEnvTitle': 'CLI config locations',

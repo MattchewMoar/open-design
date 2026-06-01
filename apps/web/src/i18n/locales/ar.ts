@@ -320,6 +320,8 @@ export const ar: Dict = {
     'يتم جلبه من CLI عندما يعرض أمر `models`. "الافتراضي" يترك الخيار لإعدادات CLI؛ "مخصص..." يسمح لك بكتابة أي معرف نموذج يقبله CLI.',
   'settings.modelPickerLiveHint':
     'تم تحديث النماذج من CLI المثبت. لا يزال الخيار الافتراضي يستخدم إعدادات CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'تم تحديث النماذج من CLI المثبت.',
   'settings.modelPickerFallbackHint':
     'يتم عرض الإعدادات الافتراضية المضمنة. انقر على إعادة المسح لجلب النماذج المباشرة من CLI.',
   'settings.cliEnvTitle': 'CLI config locations',

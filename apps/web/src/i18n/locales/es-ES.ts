@@ -320,6 +320,8 @@ export const esES: Dict = {
     'Se obtiene de la CLI cuando expone un comando `models`. «Predeterminado» deja la elección a la propia configuración de la CLI; «Personalizado…» permite escribir cualquier id de modelo aceptado por la CLI.',
   'settings.modelPickerLiveHint':
     'Los modelos se actualizaron desde la CLI instalada. Predeterminado sigue usando la configuración de la CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Los modelos se actualizaron desde la CLI instalada.',
   'settings.modelPickerFallbackHint':
     'Mostrando valores predeterminados integrados. Pulsa Reescanear para obtener modelos en vivo desde la CLI.',
   'settings.cliEnvTitle': 'CLI config locations',

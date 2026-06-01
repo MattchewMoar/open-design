@@ -320,6 +320,8 @@ export const ja: Dict = {
     'CLI が `models` コマンドを公開している場合に取得されます。「デフォルト」は CLI 自身の設定に委ね、「カスタム…」は CLI が受け付ける任意のモデル ID を入力できます。',
   'settings.modelPickerLiveHint':
     'インストール済みの CLI からモデルを更新しました。デフォルトは引き続き CLI 設定を使用します。',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'インストール済みの CLI からモデルを更新しました。',
   'settings.modelPickerFallbackHint':
     '組み込みのデフォルトを表示しています。再スキャンをクリックすると CLI から最新モデルを取得します。',
   'settings.cliEnvTitle': 'CLI config locations',

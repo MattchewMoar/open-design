@@ -2136,7 +2136,9 @@ export function SettingsDialog({
         : t('settings.modelSourceFallback');
     const modelSourceHint =
       modelSource === 'live'
-        ? t('settings.modelPickerLiveHint')
+        ? selected.supportsCustomModel === false
+          ? t('settings.modelPickerLiveCatalogOnlyHint')
+          : t('settings.modelPickerLiveHint')
         : t('settings.modelPickerFallbackHint');
     return (
       <div className="agent-card-config">

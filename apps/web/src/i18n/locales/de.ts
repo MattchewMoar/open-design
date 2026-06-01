@@ -320,6 +320,8 @@ export const de: Dict = {
     'Wird aus der CLI geladen, wenn sie einen `models`-Befehl anbietet. „Standard“ überlässt die Auswahl der CLI-Konfiguration; mit „Benutzerdefiniert…“ können Sie jede von der CLI akzeptierte Modell-ID eingeben.',
   'settings.modelPickerLiveHint':
     'Modelle wurden aus der installierten CLI aktualisiert. Standard verwendet weiterhin die CLI-Konfiguration.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Modelle wurden aus der installierten CLI aktualisiert.',
   'settings.modelPickerFallbackHint':
     'Integrierte Standardwerte werden angezeigt. Klicken Sie auf Neu scannen, um Live-Modelle aus der CLI abzurufen.',
   'settings.cliEnvTitle': 'CLI config locations',

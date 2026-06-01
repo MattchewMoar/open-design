@@ -314,6 +314,7 @@ export const fr: Dict = {
   'settings.reasoningPicker': 'Effort de raisonnement',
   'settings.modelPickerHint': 'Par défaut utilise la configuration propre de la CLI. Personnalisé… vous permet de saisir n’importe quel identifiant de modèle.',
   'settings.modelPickerLiveHint': 'Les modèles ont été actualisés depuis la CLI installée. Par défaut utilise toujours la configuration propre de la CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint': 'Les modèles ont été actualisés depuis la CLI installée.',
   'settings.modelPickerFallbackHint': 'Valeurs par défaut intégrées affichées. Cliquez sur Réanalyser pour récupérer les modèles en direct depuis la CLI.',
   'settings.cliEnvTitle': 'Avancé : proxy et chemins personnalisés',
   'settings.cliEnvHint': 'Utilisez ces réglages uniquement si vous routez le trafic CLI via votre propre proxy ou si le binaire est installé à un emplacement non standard. Les secrets restent dans la configuration locale de l’app et seule la CLI sélectionnée les voit.',

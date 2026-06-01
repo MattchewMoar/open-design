@@ -335,6 +335,7 @@ export interface Dict {
   'settings.reasoningPicker': string;
   'settings.modelPickerHint': string;
   'settings.modelPickerLiveHint': string;
+  'settings.modelPickerLiveCatalogOnlyHint': string;
   'settings.modelPickerFallbackHint': string;
   'settings.cliEnvTitle': string;
   'settings.cliEnvHint': string;

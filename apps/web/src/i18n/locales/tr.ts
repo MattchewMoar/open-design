@@ -320,6 +320,8 @@ export const tr: Dict = {
     'Bir `models` komutu açığa çıkaran CLI’lardan getirilir. "Varsayılan" seçimi CLI’ın kendi ayarına bırakır; "Özel…" CLI’ın kabul edeceği herhangi bir model kimliği seçmenize izin verir.',
   'settings.modelPickerLiveHint':
     'Modeller kurulu CLI\'dan yenilendi. Varsayılan seçenek hâlâ CLI yapılandırmasını kullanır.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Modeller kurulu CLI\'dan yenilendi.',
   'settings.modelPickerFallbackHint':
     'Yerleşik varsayılanlar gösteriliyor. CLI\'dan canlı modelleri almak için Yeniden tara\'ya tıklayın.',
   'settings.modelCustom': 'Özel (aşağıya yazın)…',

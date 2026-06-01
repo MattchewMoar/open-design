@@ -320,6 +320,8 @@ export const ru: Dict = {
     'Получается из CLI, если он поддерживает команду `models`. «По умолчанию» оставляет выбор конфигурации CLI, а «Пользовательская…» позволяет ввести любой ID модели, который CLI принимает.',
   'settings.modelPickerLiveHint':
     'Модели обновлены из установленного CLI. Вариант по умолчанию по-прежнему использует конфигурацию CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Модели обновлены из установленного CLI.',
   'settings.modelPickerFallbackHint':
     'Показаны встроенные значения по умолчанию. Нажмите «Пересканировать», чтобы получить актуальные модели из CLI.',
   'settings.cliEnvTitle': 'CLI config locations',

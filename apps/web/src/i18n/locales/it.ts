@@ -316,6 +316,8 @@ export const it: Dict = {
     'Recuperato dalla CLI quando espone un comando `models`. "Predefinito" lascia la scelta alla configurazione della CLI; "Personalizzato…" ti permette di inserire qualsiasi identificatore di modello accettato dalla CLI.',
   'settings.modelPickerLiveHint':
     'I modelli sono stati aggiornati dalla CLI installata. Predefinito usa ancora la configurazione della CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'I modelli sono stati aggiornati dalla CLI installata.',
   'settings.modelPickerFallbackHint':
     'Mostra i valori predefiniti integrati. Clicca su Rianalizza per recuperare i modelli live dalla CLI.',
   'settings.cliEnvTitle': 'Posizioni di configurazione CLI',

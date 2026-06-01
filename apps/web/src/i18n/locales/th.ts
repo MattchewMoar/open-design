@@ -314,6 +314,8 @@ export const th: Dict = {
   'settings.modelPickerHint': 'ดึงข้อมูลจาก CLI เมื่อมีคำสั่ง `models`',
   'settings.modelPickerLiveHint':
     'รีเฟรชโมเดลจาก CLI ที่ติดตั้งแล้ว ค่าเริ่มต้นยังใช้การตั้งค่าของ CLI',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'รีเฟรชโมเดลจาก CLI ที่ติดตั้งแล้ว',
   'settings.modelPickerFallbackHint':
     'กำลังแสดงค่าเริ่มต้นในตัว คลิกสแกนอีกครั้งเพื่อดึงโมเดลสดจาก CLI',
   'settings.cliEnvTitle': 'ตำแหน่งการตั้งค่า CLI',

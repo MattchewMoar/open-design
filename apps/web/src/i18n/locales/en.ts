@@ -331,6 +331,8 @@ export const en: Dict = {
     'Default uses the CLI’s own config. Custom… lets you type any model id.',
   'settings.modelPickerLiveHint':
     "Model list comes from this CLI. Default uses the CLI's own config.",
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Model list comes from this CLI.',
   'settings.modelPickerFallbackHint':
     'Showing built-in defaults. Click Rescan to pull live models from the CLI.',
   'settings.cliEnvTitle': 'Advanced: proxy & custom paths',

@@ -321,6 +321,8 @@ export const uk: Dict = {
     'Отримується з CLI, коли він виявляє команду `models`. «За замовчуванням» залишає вибір конфігурації CLI; «Власна…» дозволяє ввести будь-яке ID моделі, яке приймає CLI.',
   'settings.modelPickerLiveHint':
     'Моделі оновлено з установленого CLI. Типовий варіант і далі використовує конфігурацію CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Моделі оновлено з установленого CLI.',
   'settings.modelPickerFallbackHint':
     'Показано вбудовані типові значення. Натисніть Переканувати, щоб отримати актуальні моделі з CLI.',
   'settings.cliEnvTitle': 'CLI config locations',

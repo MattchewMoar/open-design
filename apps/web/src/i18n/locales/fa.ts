@@ -320,6 +320,8 @@ export const fa: Dict = {
     'هنگامی که CLI یک دستور `models` را ارائه می‌دهد از آن دریافت می‌شود. «پیش‌فرض» انتخاب را به پیکربندی خود CLI واگذار می‌کند؛ «سفارشی…» به شما امکان می‌دهد هر شناسه مدلی را که CLI می‌پذیرد تایپ کنید.',
   'settings.modelPickerLiveHint':
     'مدل‌ها از CLI نصب‌شده به‌روزرسانی شدند. گزینه پیش‌فرض همچنان از تنظیمات CLI استفاده می‌کند.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'مدل‌ها از CLI نصب‌شده به‌روزرسانی شدند.',
   'settings.modelPickerFallbackHint':
     'پیش‌فرض‌های داخلی نمایش داده می‌شوند. برای دریافت مدل‌های زنده از CLI روی اسکن مجدد کلیک کنید.',
   'settings.cliEnvTitle': 'CLI config locations',

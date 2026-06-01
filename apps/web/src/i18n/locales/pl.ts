@@ -320,6 +320,8 @@ export const pl: Dict = {
       'Pobierane z CLI, gdy obsługuje ono polecenie `models`. „Domyślne” pozostawia wybór konfiguracji CLI; „Własne…” pozwala wpisać dowolne ID modelu akceptowane przez CLI.',
   'settings.modelPickerLiveHint':
     'Modele zostały odświeżone z zainstalowanego CLI. Domyślny wybór nadal używa konfiguracji CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Modele zostały odświeżone z zainstalowanego CLI.',
   'settings.modelPickerFallbackHint':
     'Wyświetlane są wbudowane wartości domyślne. Kliknij Ponów skanowanie, aby pobrać modele na żywo z CLI.',
   'settings.cliEnvTitle': 'CLI config locations',

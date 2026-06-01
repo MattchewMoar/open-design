@@ -317,6 +317,8 @@ export const id: Dict = {
     'Diambil dari CLI jika tersedia. "Default" mengikuti konfigurasi CLI; "Custom..." untuk mengetik model id sendiri.',
   'settings.modelPickerLiveHint':
     'Model diperbarui dari CLI yang terpasang. Default tetap memakai konfigurasi CLI.',
+  'settings.modelPickerLiveCatalogOnlyHint':
+    'Model diperbarui dari CLI yang terpasang.',
   'settings.modelPickerFallbackHint':
     'Menampilkan default bawaan. Klik Pindai ulang untuk mengambil model langsung dari CLI.',
   'settings.cliEnvTitle': 'Lokasi konfigurasi CLI',

@@ -331,6 +331,7 @@ export const zhCN: Dict = {
     '当 CLI 提供 `models` 命令时会自动拉取。选择「默认」则沿用 CLI 自身的配置；选择「自定义」可手动输入任何 CLI 支持的模型 id。',
   'settings.modelPickerLiveHint':
     '模型列表来自这个 CLI；选“默认”会沿用 CLI 自己的设置。',
+  'settings.modelPickerLiveCatalogOnlyHint': '模型列表来自这个 CLI。',
   'settings.modelPickerFallbackHint':
     '正在显示内置默认值。点击“重新扫描”可从 CLI 拉取实时模型。',
   'settings.cliEnvTitle': 'CLI 配置位置',
