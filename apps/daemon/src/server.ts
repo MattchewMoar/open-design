@@ -5959,6 +5959,7 @@ export async function startServer({
     });
     // Bump the parent project's updatedAt so the project list re-orders.
     updateProject(db, req.params.id, {});
+    reportFinalizedMessage(saved, m);
     res.json({ message: saved });
   });
 
