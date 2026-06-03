@@ -396,6 +396,124 @@ describe('App project creation routing', () => {
     );
   });
 
+  it('does not auto-pick from a partial rescan when an older bootstrap settles', async () => {
+    const codexAgent: AgentInfo = {
+      id: 'codex',
+      name: 'Codex CLI',
+      bin: 'codex',
+      available: true,
+      version: '0.80.0',
+      models: [{ id: 'default', label: 'Default' }],
+    };
+    const claudeAgent: AgentInfo = {
+      id: 'claude',
+      name: 'Claude Code',
+      bin: 'claude',
+      available: true,
+      version: '1.0.0',
+      models: [{ id: 'default', label: 'Default' }],
+    };
+    const staleBootstrap = deferred<AgentInfo[]>();
+    const rescan = deferred<AgentInfo[]>();
+    mockedLoadConfig.mockReturnValue({ ...baseConfig, agentId: null });
+    mockedListProjects.mockResolvedValue([]);
+    mockedFetchAgentsStream
+      .mockReturnValueOnce(staleBootstrap.promise)
+      .mockImplementationOnce(({ onAgent }) => {
+        onAgent(codexAgent);
+        return rescan.promise;
+      });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh agents' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('entry-agent-codex').textContent).toBe(
+        'Codex CLI',
+      );
+    });
+
+    await act(async () => {
+      staleBootstrap.resolve([]);
+      await staleBootstrap.promise;
+    });
+    await act(async () => {
+      rescan.resolve([codexAgent, claudeAgent]);
+      await rescan.promise;
+    });
+
+    await waitFor(() => {
+      expect(mockedSaveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'claude' }),
+      );
+    });
+    expect(
+      mockedSaveConfig.mock.calls.some(([saved]) => saved.agentId === 'codex'),
+    ).toBe(false);
+  });
+
+  it('keeps auto-pick gated while rescanning from an empty agent state', async () => {
+    const codexAgent: AgentInfo = {
+      id: 'codex',
+      name: 'Codex CLI',
+      bin: 'codex',
+      available: true,
+      version: '0.80.0',
+      models: [{ id: 'default', label: 'Default' }],
+    };
+    const claudeAgent: AgentInfo = {
+      id: 'claude',
+      name: 'Claude Code',
+      bin: 'claude',
+      available: true,
+      version: '1.0.0',
+      models: [{ id: 'default', label: 'Default' }],
+    };
+    const initialProbe = deferred<AgentInfo[]>();
+    const rescan = deferred<AgentInfo[]>();
+    mockedLoadConfig.mockReturnValue({ ...baseConfig, agentId: null });
+    mockedListProjects.mockResolvedValue([]);
+    mockedFetchAgentsStream
+      .mockReturnValueOnce(initialProbe.promise)
+      .mockImplementationOnce(({ onAgent }) => {
+        onAgent(codexAgent);
+        return rescan.promise;
+      });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mockedFetchAgentsStream).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      initialProbe.resolve([]);
+      await initialProbe.promise;
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh agents' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('entry-agent-codex').textContent).toBe(
+        'Codex CLI',
+      );
+    });
+
+    await act(async () => {
+      rescan.resolve([codexAgent, claudeAgent]);
+      await rescan.promise;
+    });
+
+    await waitFor(() => {
+      expect(mockedSaveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'claude' }),
+      );
+    });
+    expect(
+      mockedSaveConfig.mock.calls.some(([saved]) => saved.agentId === 'codex'),
+    ).toBe(false);
+  });
+
   it('keeps a newly created project open when the initial project list resolves stale', async () => {
     const bootstrapProjects = deferred<Project[]>();
     mockedListProjects

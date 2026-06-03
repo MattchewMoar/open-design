@@ -692,7 +692,7 @@ function AppInner() {
           setAgents([]);
         })
         .finally(() => {
-          if (cancelled) return;
+          if (cancelled || !isCurrentAgentStreamRequest(agentRequestId)) return;
           setAgentsLoading(false);
         });
 
@@ -1106,6 +1106,7 @@ function AppInner() {
         setConfig(nextConfig);
       }
       const agentRequestId = beginAgentStreamRequest();
+      setAgentsLoading(true);
       try {
         const next = await fetchAgentsStream({
           onAgent: (agent) => {
