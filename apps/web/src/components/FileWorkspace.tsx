@@ -294,7 +294,12 @@ export function FileWorkspace({
   focusQuestionsRequest = null,
 }: Props) {
   const t = useT();
-  const showQuestionsTab = Boolean(questionForm || questionsGenerating);
+  // The Questions tab only exists while there's an unanswered form. Once the
+  // user replies, the answered copy moves back into chat and the tab must close
+  // — so gate on `questionFormSubmittedAnswers === undefined` rather than the
+  // mere presence of a form, otherwise a locked duplicate lingers in the panel.
+  const showQuestionsTab =
+    Boolean(questionForm || questionsGenerating) && questionFormSubmittedAnswers === undefined;
   const analytics = useAnalytics();
   // P1 page_view page_name=file_manager — once per project the user lands
   // inside the workspace. Re-fire when the projectId changes so a

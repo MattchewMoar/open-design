@@ -777,7 +777,11 @@ export function ProjectView({
   // Submission is gated separately by the panel via `submitDisabled`/generating.
   const questionFormActive =
     (!!questionForm || questionsGenerating) && questionFormSubmittedAnswers === undefined;
-  const hasQuestions = Boolean(questionForm || questionsGenerating);
+  // Mirror `questionFormActive`'s unanswered gate: once the user answers, the
+  // Questions tab closes, so the auto-focus nonce must not treat an answered
+  // form as a freshly appeared one.
+  const hasQuestions =
+    Boolean(questionForm || questionsGenerating) && questionFormSubmittedAnswers === undefined;
   // Stable identity for the current form occurrence, used to remember that its
   // one-by-one reveal already played. Keyed on the conversation + template id
   // (not the message index) so the brief streaming→persisted message swap —
