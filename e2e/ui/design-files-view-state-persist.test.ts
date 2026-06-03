@@ -156,10 +156,22 @@ function seedPngFile(page: Page, projectId: string, name: string): Promise<void>
 }
 
 async function openDesignFilesTab(page: Page): Promise<void> {
-  await page.getByTestId('design-files-tab').click();
-  // The Design Files panel renders a table once files are present; wait for
-  // the controls row that always appears at the top of the panel.
-  await expect(page.locator('.df-controls-row')).toBeVisible({ timeout: 10_000 });
+  const tab = page.getByTestId('design-files-tab');
+  await tab.click();
+  await expect
+    .poll(async () => {
+      await tab.click().catch(() => {});
+      if ((await tab.getAttribute('aria-selected')) !== 'true') return false;
+      const controls = page.locator('.df-controls-row');
+      const pageSize = page.getByTestId('df-page-size-select');
+      const empty = page.getByTestId('design-files-empty');
+      return (
+        (await controls.isVisible().catch(() => false)) ||
+        (await pageSize.isVisible().catch(() => false)) ||
+        (await empty.isVisible().catch(() => false))
+      );
+    }, { timeout: 10_000 })
+    .toBe(true);
 }
 
 // Wait until the per-page <select> is present — it only appears when
@@ -200,6 +212,15 @@ async function seedProjectWithFiles(page: Page, projectId: string): Promise<void
  * Precondition: the Design Files tab must be open and the page-size select visible.
  */
 async function setNonDefaultViewPrefs(page: Page): Promise<void> {
+  await expect
+    .poll(async () => {
+      const pageSize = page.getByTestId('df-page-size-select');
+      if (await pageSize.isVisible().catch(() => false)) return true;
+      await page.getByTestId('design-files-tab').click();
+      return false;
+    }, { timeout: 10_000 })
+    .toBe(true);
+
   // Change pageSize from default 30 to 15
   const pageSizeSelect = page.getByTestId('df-page-size-select');
   await pageSizeSelect.selectOption('15');

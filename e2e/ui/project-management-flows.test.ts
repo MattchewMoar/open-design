@@ -1066,7 +1066,7 @@ test('[P1] projects page shows live artifact cards, supports search, and opens t
   await expect(homeDesignCard(page, 'Regular Prototype')).toHaveCount(0);
 
   await liveCard.click();
-  await expect(page).toHaveURL(/\/projects\/proj-live$/);
+  await expect(page).toHaveURL(/\/projects\/proj-live\/files\/live%3Aartifact-1$/);
   await expect(page.getByTestId('project-title')).toContainText('Orbit Daily Digest');
 });
 

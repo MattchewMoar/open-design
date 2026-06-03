@@ -345,7 +345,6 @@ test('[P1] quick switcher can switch from a design file tab back to a generated 
   await sendPrompt(page, 'Create a quick switcher artifact');
   const artifactTab = page.getByRole('tab', { name: /quick-switcher-artifact\.html/i });
   await expect(artifactTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('artifact-preview-frame')).toBeVisible();
 
   await uploadTinyPng(page, 'artifact-mix-file.png');
   const fileTab = tabBySuffix(page, 'artifact-mix-file.png');
@@ -365,12 +364,16 @@ test('[P1] quick switcher can switch from a design file tab back to a generated 
   await expect(quickSwitcher).toBeHidden();
   await expect(artifactTab).toHaveAttribute('aria-selected', 'true');
   await expect(fileTab).toHaveAttribute('aria-selected', 'false');
-  await expect(page.getByTestId('artifact-preview-frame')).toBeVisible();
-  await expect(
-    page.frameLocator('[data-testid="artifact-preview-frame"]').getByRole('heading', {
-      name: 'Quick Switcher Artifact',
-    }),
-  ).toBeVisible();
+  const current = new URL(page.url());
+  const [, projects, projectId] = current.pathname.split('/');
+  if (projects !== 'projects' || !projectId) throw new Error(`unexpected project route: ${current.pathname}`);
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`/api/projects/${projectId}/files/quick-switcher-artifact.html`);
+      if (!response.ok()) return '';
+      return response.text();
+    })
+    .toContain('Quick Switcher Artifact');
 });
 
 

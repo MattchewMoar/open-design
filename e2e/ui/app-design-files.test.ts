@@ -288,7 +288,12 @@ async function openDesignFile(page: Page, fileName: string) {
     return;
   }
 
-  await page.getByRole('button', { name: new RegExp(fileName.replace(/\./g, '\\.')) }).click();
+  await page.getByTestId('design-files-tab').click();
+  const fileRow = page.locator('[data-testid^="design-file-row-"]', {
+    hasText: fileName,
+  });
+  await expect(fileRow).toBeVisible();
+  await fileRow.getByRole('button').first().click();
   await page.getByTestId('design-file-preview').getByRole('button', { name: 'Open' }).click();
 }
 

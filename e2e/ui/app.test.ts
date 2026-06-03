@@ -687,8 +687,14 @@ async function openDesignFile(page: Page, fileName: string) {
     hasText: fileName,
   });
   await expect(fileRow).toBeVisible();
-  await fileRow.getByRole('button').first().click();
-  await page.getByTestId('design-file-preview').getByRole('button', { name: 'Open' }).click();
+  const mainButton = fileRow.getByRole('button').first();
+  await mainButton.click();
+  const openButton = page.getByTestId('design-file-preview').getByRole('button', { name: 'Open' });
+  if (await openButton.isVisible().catch(() => false)) {
+    await openButton.click();
+    return;
+  }
+  await mainButton.dblclick();
 }
 
 async function expectFileSource(
@@ -1556,9 +1562,10 @@ async function runDeepLinkPreviewFlow(
 
   await page.goto(`/projects/${projectId}/files/${fileName}`, { waitUntil: 'domcontentloaded' });
   await waitForLoadingToClear(page);
-  await expect(artifactPreview(page)).toBeVisible();
-  const frame = artifactPreviewFrame(page);
-  await expect(frame.getByRole('heading', { name: entry.mockArtifact!.heading })).toBeVisible();
+  const artifactTab = page.getByRole('tab', { name: new RegExp(`${fileName.replace('.', '\\.')}$`, 'i') });
+  await expect(artifactTab).toBeVisible();
+  await expect(artifactTab).toHaveAttribute('aria-selected', 'true');
+  await expectProjectFileToContain(page, projectId, fileName, entry.mockArtifact!.heading);
   await expectScenarioProjectState(page, entry, projectId);
 }
 

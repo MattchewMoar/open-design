@@ -324,6 +324,7 @@ test('[P1] typing a draft replacement Composio key does not trigger global autos
   await expect(settingsDialog.getByTestId('connector-grid-wrap')).toBeVisible();
   await expect(settingsDialog.getByText('Saved · ••••1234')).toBeVisible();
 
+  await page.waitForTimeout(1200);
   const appConfigPersistCountBeforeDraftEdit = appConfigPersistBodies.length;
 
   const replacementInput = settingsDialog.getByPlaceholder('Paste a new key to replace the saved one');
