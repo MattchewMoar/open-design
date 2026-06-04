@@ -319,7 +319,7 @@ export function parsePartialQuestionForm(input: string): QuestionForm | null {
   // omitting it here makes a custom CTA flicker in only once the close tag
   // arrives.
   const submitLabel = typeof top.submitLabel === 'string' ? top.submitLabel : undefined;
-  const questions = shapeStreamingQuestions(top.questions);
+  const questions = shapeStreamingQuestions(top.questions, countClosedQuestionObjects(body));
   return {
     id,
     title,
@@ -366,10 +366,9 @@ function endsInsideJsonString(s: string): boolean {
 // streaming, matching the AskUserQuestion card. The trailing in-flight object
 // with no label yet is held back (no "q1" placeholder flicker); it appears
 // once its label lands.
-function shapeStreamingQuestions(rawQuestions: unknown): FormQuestion[] {
+function shapeStreamingQuestions(rawQuestions: unknown, closedCount: number): FormQuestion[] {
   if (!Array.isArray(rawQuestions)) return [];
   const out: FormQuestion[] = [];
-  const lastIndex = rawQuestions.length - 1;
   rawQuestions.forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') return;
     const q = raw as Record<string, unknown>;
@@ -380,16 +379,63 @@ function shapeStreamingQuestions(rawQuestions: unknown): FormQuestion[] {
     // both the rendered field and the user's answer in the still-editable
     // panel, so a mismatch would orphan an in-progress answer (mid-stream when
     // a late id replaces the fallback, and again at the preview→final swap).
-    //   - `id` field has streamed → use it.
-    //   - not the in-flight (last) object → its braces have closed, so no id
-    //     is coming and `mapRawQuestion`'s `q${index+1}` fallback is final.
-    //   - last object with no id yet → it may still gain one; hold it back.
+    //   - object's braces have streamed (closed) → its id is final, whether a
+    //     real `id` or `mapRawQuestion`'s `q${index+1}` fallback → show it.
+    //   - in-flight (last, not yet closed) object WITH an `id` → id is stable
+    //     even as more fields stream → show it (options keep growing).
+    //   - in-flight object with no id yet → it may still gain one; hold back.
+    const isClosed = index < closedCount;
     const hasId = typeof q.id === 'string' && q.id.trim().length > 0;
-    if (!hasId && index === lastIndex) return;
+    if (!isClosed && !hasId) return;
     const mapped = mapRawQuestion(raw, index);
     if (mapped) out.push(mapped);
   });
   return out;
+}
+
+// Count how many question objects in a partial `"questions": [ … ]` body have
+// their closing brace already streamed (string-aware). A closed object's id is
+// final (real `id` or the `q${index+1}` fallback), so it's safe to surface;
+// only the trailing still-open object might still gain an `id`.
+function countClosedQuestionObjects(body: string): number {
+  const keyMatch = /"questions"\s*:\s*\[/.exec(body);
+  if (!keyMatch) return 0;
+  let i = keyMatch.index + keyMatch[0].length;
+  let count = 0;
+  while (i < body.length) {
+    while (i < body.length && /[\s,]/.test(body[i] as string)) i++;
+    if (i >= body.length || body[i] === ']') break;
+    if (body[i] !== '{') break;
+    const obj = extractBalancedObject(body, i);
+    if (!obj) break; // trailing object hasn't closed yet
+    count++;
+    i += obj.length;
+  }
+  return count;
+}
+
+// Return the substring for the balanced `{...}` object starting at `start`, or
+// null if it never closes (string-aware so braces inside strings don't count).
+function extractBalancedObject(s: string, start: number): string | null {
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i] as string;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 
 function normalizeType(raw: unknown): QuestionType {

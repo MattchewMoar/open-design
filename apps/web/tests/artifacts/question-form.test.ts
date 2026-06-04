@@ -205,6 +205,22 @@ describe('parsePartialQuestionForm (true token-by-token streaming)', () => {
     expect(parsePartialQuestionForm(buf)?.questions.map((q) => q.label)).toEqual(['Q']);
   });
 
+  it('streams a single closed no-id question before the close tag arrives', () => {
+    // The object is complete (its `}` streamed) but has no explicit id and no
+    // `]`/close tag yet. Its fallback id (q1) is already final, so it should
+    // show now rather than waiting for the close tag.
+    const buf = '<question-form id="discovery">{"questions":[{"label":"First","type":"text"}';
+    expect(parsePartialQuestionForm(buf)?.questions.map((q) => q.label)).toEqual(['First']);
+    expect(parsePartialQuestionForm(buf)?.questions.map((q) => q.id)).toEqual(['q1']);
+  });
+
+  it('still holds a no-id question whose object is not yet closed', () => {
+    // Same content but the object is still open (no `}`): it might still gain
+    // an id, so surfacing it now risks an id swap that orphans an answer.
+    const buf = '<question-form id="discovery">{"questions":[{"label":"First","type":"text"';
+    expect(parsePartialQuestionForm(buf)?.questions).toEqual([]);
+  });
+
   it('holds a label-first question until its canonical id is determinable', () => {
     // label streamed, the in-flight object has no id yet — surfacing it now
     // would force a later id swap that orphans an in-progress answer, so it
