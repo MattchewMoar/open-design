@@ -159,4 +159,30 @@ describe('parsePartialQuestionForm (true token-by-token streaming)', () => {
     expect(f?.title).toBe('Quick brief');
     expect(f?.questions).toEqual([]);
   });
+
+  it('does not let a nested question id/description masquerade as form metadata', () => {
+    // No form-level id on the tag or top-level body — only a question-level
+    // id. The form id must stay the stable fallback, not adopt "platform"
+    // (which would change the live panel's identity mid-stream).
+    const f = parsePartialQuestionForm(
+      '<question-form>{"questions":[{"id":"platform","label":"Platform","description":"nested"',
+    );
+    expect(f?.id).toBe('discovery');
+    expect(f?.description).toBeUndefined();
+    expect(f?.questions.map((q) => q.label)).toEqual(['Platform']);
+  });
+
+  it('keeps streaming through a closed ```json fence before the close tag arrives', () => {
+    // Fenced body fully written, trailing ``` present, but </question-form>
+    // not yet — the preview must stay populated, not drop to empty.
+    const buf =
+      '<question-form id="discovery">```json\n{"questions":[{"id":"a","label":"First","type":"text"}]}\n```';
+    expect(parsePartialQuestionForm(buf)?.questions.map((q) => q.label)).toEqual(['First']);
+  });
+
+  it('keeps streaming while only a partial trailing fence has arrived', () => {
+    const buf =
+      '<question-form id="discovery">```json\n{"questions":[{"id":"a","label":"First","type":"text"}]}\n``';
+    expect(parsePartialQuestionForm(buf)?.questions.map((q) => q.label)).toEqual(['First']);
+  });
 });

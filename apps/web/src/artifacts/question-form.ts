@@ -294,14 +294,29 @@ export function parsePartialQuestionForm(input: string): QuestionForm | null {
   const attrs = parseAttrs(m[2] ?? '');
   const closeIdx = findCloseTag(input, openEnd, closeTag);
   const rawBody = closeIdx === -1 ? input.slice(openEnd) : input.slice(openEnd, closeIdx);
-  // Strip a leading fenced ```json wrapper; the closing fence may not have
-  // streamed in yet, so only the opening fence is removed.
-  const body = rawBody.replace(/^\s*```(?:json)?\s*/i, '');
-  const id = attrs.id ?? extractJsonStringField(body, 'id') ?? 'discovery';
-  const title =
-    attrs.title ?? extractJsonStringField(body, 'title') ?? 'A few quick questions';
-  const description = extractJsonStringField(body, 'description');
-  const questions = extractStreamingQuestions(body);
+  // Strip the fenced ```json wrapper some models emit. The opening fence is
+  // removed always; the trailing fence is removed too once it streams in
+  // (possibly only a partial ``` so far) — otherwise the leftover backticks
+  // make the JSON unparseable in the gap between "fence closed" and
+  // "</question-form> arrived", dropping the live preview back to empty.
+  const body = rawBody
+    .replace(/^\s*```(?:json)?\s*/i, '')
+    .replace(/\s*`{1,3}\s*$/, '');
+  // Derive form-level metadata from the *parsed top-level object*, not a
+  // whole-body regex scan: a nested question/option `id`/`title`/`description`
+  // must not masquerade as the form's own. `id` keys the live Questions panel
+  // (see ProjectView), so a mid-stream identity change would remount it.
+  const parsed = parsePartialJson(body);
+  const top =
+    parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  const topId = typeof top.id === 'string' && top.id.trim().length > 0 ? top.id.trim() : undefined;
+  const topTitle = typeof top.title === 'string' && top.title.trim().length > 0 ? top.title : undefined;
+  const id = attrs.id ?? topId ?? 'discovery';
+  const title = attrs.title ?? topTitle ?? 'A few quick questions';
+  const description = typeof top.description === 'string' ? top.description : undefined;
+  const questions = shapeStreamingQuestions(top.questions);
   return {
     id,
     title,
@@ -310,22 +325,17 @@ export function parsePartialQuestionForm(input: string): QuestionForm | null {
   };
 }
 
-// Extract questions from a still-streaming `"questions": [ … ]` body. Unlike a
-// complete-objects-only pass, this repairs the truncated JSON prefix so a
-// question shows the moment its `label` (prompt) text exists and its options
-// grow in one at a time — true token-by-token streaming, matching the
-// AskUserQuestion card. The trailing in-flight object with no label yet is
-// held back (no "q1" placeholder flicker); it appears once its label lands.
-function extractStreamingQuestions(body: string): FormQuestion[] {
-  const data = parsePartialJson(body);
-  if (!data || typeof data !== 'object') return [];
-  const rawQuestions = (data as { questions?: unknown }).questions;
+// Shape questions from a still-streaming, already-parsed `questions` array.
+// Unlike a complete-objects-only pass, the repaired prefix (see
+// `parsePartialJson`) means a question shows the moment its `label` (prompt)
+// text exists and its options grow in one at a time — true token-by-token
+// streaming, matching the AskUserQuestion card. The trailing in-flight object
+// with no label yet is held back (no "q1" placeholder flicker); it appears
+// once its label lands.
+function shapeStreamingQuestions(rawQuestions: unknown): FormQuestion[] {
   if (!Array.isArray(rawQuestions)) return [];
   const out: FormQuestion[] = [];
   rawQuestions.forEach((raw, index) => {
-    // Require a real prompt before surfacing the question. `mapRawQuestion`
-    // would otherwise default a label-less object to its id ("q1"), which
-    // reads as a flicker while the model is still typing the label.
     if (!raw || typeof raw !== 'object') return;
     const label = (raw as Record<string, unknown>).label;
     if (typeof label !== 'string' || label.trim().length === 0) return;
@@ -333,19 +343,6 @@ function extractStreamingQuestions(body: string): FormQuestion[] {
     if (mapped) out.push(mapped);
   });
   return out;
-}
-
-// Best-effort extraction of a top-level "field": "value" string from a partial
-// JSON body — used for title/id/description before the full body parses.
-function extractJsonStringField(body: string, field: string): string | undefined {
-  const re = new RegExp(`"${field}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
-  const m = re.exec(body);
-  if (!m) return undefined;
-  try {
-    return JSON.parse(`"${m[1]}"`) as string;
-  } catch {
-    return m[1];
-  }
 }
 
 function normalizeType(raw: unknown): QuestionType {
