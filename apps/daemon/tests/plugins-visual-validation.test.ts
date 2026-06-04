@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { PNG } from 'pngjs';
@@ -108,7 +108,7 @@ describe('visual validation atom runner', () => {
     }
   });
 
-  it('skips cleanly when the Playwright browser runtime is unavailable', async () => {
+  it('fails closed when the Playwright browser runtime is unavailable', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'od-visual-no-browser-'));
     try {
       await writeFile(path.join(cwd, 'index.html'), '<!doctype html><html><body>ok</body></html>', 'utf8');
@@ -125,9 +125,10 @@ describe('visual validation atom runner', () => {
         },
       });
 
-      expect(result.report.status).toBe('skipped');
-      expect(result.report.message).toContain('Playwright browser runtime unavailable');
-      expect(result.signals).toEqual({});
+      expect(result.report.status).toBe('failed');
+      expect(result.report.message).toContain("Executable doesn't exist");
+      expect(result.signals['preview.ok']).toBe(false);
+      expect(result.signals['critique.score']).toBe(1);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -159,6 +160,35 @@ describe('visual validation atom runner', () => {
     }
   });
 
+  it('fails closed when reference auto-discovery cannot read the project tree', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'od-visual-discovery-fail-'));
+    try {
+      await writeFile(path.join(cwd, 'index.html'), '<!doctype html><html><body>ok</body></html>', 'utf8');
+      await mkdir(path.join(cwd, 'references'), { recursive: true });
+      await writeFile(
+        path.join(cwd, 'references', 'reference-home.png'),
+        PNG.sync.write(createFilledPng(200, 120, [255, 255, 255, 255])),
+      );
+      await mkdir(path.join(cwd, 'spec'), { recursive: true });
+      await chmod(path.join(cwd, 'spec'), 0o000);
+
+      const result = await runVisualValidation({
+        cwd,
+        captureScreenshot: async ({ outputPath }) => {
+          await writeFile(outputPath, PNG.sync.write(createFilledPng(200, 120, [255, 255, 255, 255])));
+        },
+      });
+
+      expect(result.report.status).toBe('failed');
+      expect(result.report.message).toContain('EACCES');
+      expect(result.signals['preview.ok']).toBe(false);
+      expect(result.signals['critique.score']).toBe(1);
+    } finally {
+      await chmod(path.join(cwd, 'spec'), 0o755).catch(() => {});
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('only auto-discovers PNG reference screenshots', async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), 'od-visual-png-only-'));
     try {
@@ -175,6 +205,32 @@ describe('visual validation atom runner', () => {
       expect(result.report.status).toBe('skipped');
       expect(result.report.message).toContain('no reference screenshot found');
       expect(result.signals).toEqual({});
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('skips symlinked directories while scanning for references', async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'od-visual-symlink-cycle-'));
+    try {
+      await writeFile(path.join(cwd, 'index.html'), '<!doctype html><html><body>ok</body></html>', 'utf8');
+      await mkdir(path.join(cwd, 'references'), { recursive: true });
+      await writeFile(
+        path.join(cwd, 'references', 'reference-home.png'),
+        PNG.sync.write(createFilledPng(200, 120, [255, 255, 255, 255])),
+      );
+      await mkdir(path.join(cwd, 'loop', 'nested'), { recursive: true });
+      await symlink(path.join(cwd, 'loop'), path.join(cwd, 'loop', 'nested', 'back-to-loop'));
+
+      const result = await runVisualValidation({
+        cwd,
+        captureScreenshot: async ({ outputPath }) => {
+          await writeFile(outputPath, PNG.sync.write(createFilledPng(200, 120, [255, 255, 255, 255])));
+        },
+      });
+
+      expect(result.report.status).toBe('ok');
+      expect(result.report.comparison?.referencePath).toBe('references/reference-home.png');
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

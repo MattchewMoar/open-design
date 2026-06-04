@@ -82,21 +82,21 @@ export async function runVisualValidation(
     };
   }
 
-  const referenceImages = await resolveReferenceImages(cwd, input.referenceImages);
-  if (referenceImages.length === 0) {
-    return {
-      report: {
-        status: 'skipped',
-        entryFile,
-        message: 'skipped: no reference screenshot found for visual validation',
-        comparedAt: new Date().toISOString(),
-        comparison: null,
-      },
-      signals: {},
-    };
-  }
-
   try {
+    const referenceImages = await resolveReferenceImages(cwd, input.referenceImages);
+    if (referenceImages.length === 0) {
+      return {
+        report: {
+          status: 'skipped',
+          entryFile,
+          message: 'skipped: no reference screenshot found for visual validation',
+          comparedAt: new Date().toISOString(),
+          comparison: null,
+        },
+        signals: {},
+      };
+    }
+
     const outputDir = path.join(cwd, 'critique', 'visual-validation');
     await fsp.mkdir(outputDir, { recursive: true });
     let best: VisualValidationComparison | null = null;
@@ -162,18 +162,6 @@ export async function runVisualValidation(
       },
     };
   } catch (error) {
-    if (isUnavailableBrowserRuntimeError(error)) {
-      return {
-        report: {
-          status: 'skipped',
-          entryFile,
-          message: `skipped: Playwright browser runtime unavailable for visual validation (${formatVisualValidationError(error)})`,
-          comparedAt: new Date().toISOString(),
-          comparison: null,
-        },
-        signals: {},
-      };
-    }
     return {
       report: {
         status: 'failed',
@@ -364,6 +352,7 @@ async function walkFiles(root: string, relDir: string): Promise<string[]> {
   const out: string[] = [];
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
+    if (entry.isSymbolicLink()) continue;
     const relPath = relDir ? path.join(relDir, entry.name) : entry.name;
     if (entry.isDirectory()) {
       if (IGNORED_REFERENCE_SCAN_DIRS.has(entry.name)) continue;
@@ -389,13 +378,6 @@ function summarizeComparison(comparison: VisualValidationComparison): string {
 function formatVisualValidationError(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return 'unknown error';
-}
-
-function isUnavailableBrowserRuntimeError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const message = error.message.toLowerCase();
-  return message.includes("executable doesn't exist")
-    || message.includes('please run the following command to download new browsers');
 }
 
 function buildSuggestions(input: {
