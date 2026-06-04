@@ -230,6 +230,16 @@ export function listInstalledPlugins(db: SqliteDb): InstalledPluginRecord[] {
   return rows.map(rowToInstalledPlugin);
 }
 
+export function listVisibleInstalledPlugins(db: SqliteDb): InstalledPluginRecord[] {
+  return filterVisibleInstalledPlugins(listInstalledPlugins(db));
+}
+
+export function filterVisibleInstalledPlugins(
+  plugins: ReadonlyArray<InstalledPluginRecord>,
+): InstalledPluginRecord[] {
+  return plugins.filter((plugin) => plugin.manifest.od?.hidden !== true);
+}
+
 export function getInstalledPlugin(db: SqliteDb, id: string): InstalledPluginRecord | null {
   const row = db.prepare(`SELECT * FROM installed_plugins WHERE id = ?`).get(id) as DbRow | undefined;
   return row ? rowToInstalledPlugin(row) : null;

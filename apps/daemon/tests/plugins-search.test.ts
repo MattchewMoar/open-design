@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { InstalledPluginRecord, PluginManifest } from '@open-design/contracts';
 import { searchInstalledPlugins } from '../src/plugins/search.js';
 
-const make = (id: string, over: Partial<{ title: string; description: string; tags: string[]; taskKind: string; mode: string; trust: 'trusted' | 'restricted' | 'bundled'; sourceKind: 'bundled' | 'local' | 'github' | 'url'; }>): InstalledPluginRecord => ({
+const make = (id: string, over: Partial<{ title: string; description: string; tags: string[]; taskKind: string; mode: string; trust: 'trusted' | 'restricted' | 'bundled'; sourceKind: 'bundled' | 'local' | 'github' | 'url'; hidden: boolean; }>): InstalledPluginRecord => ({
   id,
   title: over.title ?? `Title for ${id}`,
   version: '0.1.0',
@@ -26,7 +26,9 @@ const make = (id: string, over: Partial<{ title: string; description: string; ta
       ? { od: {
           ...(over.taskKind ? { taskKind: over.taskKind } : {}),
           ...(over.mode     ? { mode: over.mode } : {}),
+          ...(over.hidden   ? { hidden: true } : {}),
         } }
+      : over.hidden ? { od: { hidden: true } }
       : {}),
   } as PluginManifest,
 });
@@ -68,6 +70,21 @@ describe('searchInstalledPlugins — free-text query', () => {
   it('returns empty entries when query matches nothing', () => {
     const r = searchInstalledPlugins({ plugins, query: 'no-such-thing' });
     expect(r.entries).toEqual([]);
+  });
+
+  it('hides od.hidden records from installed search results', () => {
+    const r = searchInstalledPlugins({
+      plugins: [
+        make('visible-bundle', { title: 'Visible Bundle' }),
+        make('visible-bundle/deck-skeleton', { title: 'Deck Skeleton' }),
+        make('visible-bundle/deck-pacing', { title: 'Deck Pacing', hidden: true }),
+      ],
+      query: 'visible-bundle',
+    });
+    expect(r.entries.map((entry) => entry.plugin.id).sort()).toEqual([
+      'visible-bundle',
+      'visible-bundle/deck-skeleton',
+    ]);
   });
 });
 

@@ -144,6 +144,7 @@ import {
   isDiffReviewSurfaceId,
   listSkillPluginCandidates,
   listInstalledPlugins,
+  listVisibleInstalledPlugins,
   listIterationsForRun,
   MissingInputError,
   NonApplyablePluginError,
@@ -6834,7 +6835,7 @@ export async function startServer({
   // and snapshot fetch by id (used by run replay tooling).
   app.get('/api/plugins', async (_req, res) => {
     try {
-      const plugins = listInstalledPlugins(db);
+      const plugins = listVisibleInstalledPlugins(db);
       res.json({ plugins });
     } catch (err) {
       res.status(500).json({ error: String(err) });

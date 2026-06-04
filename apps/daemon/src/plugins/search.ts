@@ -59,6 +59,7 @@ export function searchInstalledPlugins(input: SearchInstalledPluginsInput): Sear
 
   const out: SearchInstalledPluginsResultEntry[] = [];
   for (const plugin of input.plugins) {
+    if (plugin.manifest.od?.hidden === true) continue;
     const manifest = plugin.manifest;
     const matched: SearchInstalledPluginsResultEntry['matched'] = [];
 
