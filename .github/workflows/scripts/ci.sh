@@ -120,6 +120,13 @@ if [ -z "$node_version" ] || [ -z "$npm_version" ] || [ -z "$corepack_version" ]
   exit 1
 fi
 
+node_major="${node_version#v}"
+node_major="${node_major%%.*}"
+if [ "$node_major" != "24" ]; then
+  echo "Node 24 is required for CI, got $node_version" >&2
+  exit 1
+fi
+
 append_summary ""
 append_summary "### Toolchain"
 append_summary ""
