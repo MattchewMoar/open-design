@@ -662,7 +662,7 @@ jobs:
           .\.github\workflow\scripts\release\prepare-platform-assets.ps1 `
             -ReleaseTarget win_x64 `
             -ReleaseAssetsDir "${{ runner.temp }}\release-assets\win_x64" `
-            -ToolsPackDir "${{ runner.temp }}\tools-pack" `
+            -BuildJsonPath "${{ runner.temp }}\release-build\win_x64\build.json" `
             -ReleaseNamespace release-beta-win `
             -ReleaseVersion "${{ needs.metadata.outputs.beta_version }}" `
             -ReleaseAssetSuffix ".unsigned" `
@@ -680,6 +680,7 @@ jobs:
           RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin != '' && inputs.release_public_origin || vars.CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN }}
           RELEASE_REPORT_DIR: ${{ runner.temp }}\release-report\win_x64
           RELEASE_REPORT_ZIP_PATH: ${{ runner.temp }}\release-report\win_x64-report.zip
+          WIN_INCLUDE_ZIP: ${{ inputs.win_x64_target == 'all' || inputs.win_x64_target == 'zip' }}
           RELEASE_SIGNED: "false"
           RELEASE_STORAGE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_RELEASES_AK }}
           RELEASE_STORAGE_BUCKET: ${{ secrets.CLOUDFLARE_R2_RELEASES_BUCKET }}

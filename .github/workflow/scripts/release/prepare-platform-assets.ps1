@@ -5,7 +5,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$ReleaseAssetsDir,
   [Parameter(Mandatory = $true)]
-  [string]$ToolsPackDir,
+  [string]$BuildJsonPath,
   [Parameter(Mandatory = $true)]
   [string]$ReleaseNamespace,
   [Parameter(Mandatory = $true)]
@@ -29,14 +29,17 @@ if ($ReleaseTarget -ne "win_x64") {
 
 New-Item -ItemType Directory -Force -Path $ReleaseAssetsDir | Out-Null
 
-$builderDir = Join-Path $ToolsPackDir "out\win\namespaces\$ReleaseNamespace\builder"
-$sourceInstaller = Join-Path $builderDir "Open Design-$ReleaseNamespace-setup.exe"
-$sourceZip = Join-Path $builderDir "Open Design-$ReleaseNamespace-portable.zip"
-if (-not (Test-Path -LiteralPath $sourceInstaller)) {
-  throw "expected installer not found at $sourceInstaller"
+if (-not (Test-Path -LiteralPath $BuildJsonPath)) {
+  throw "expected build json not found at $BuildJsonPath"
 }
-if ($IncludeZip -and -not (Test-Path -LiteralPath $sourceZip)) {
-  throw "expected portable zip not found at $sourceZip"
+$build = Get-Content -LiteralPath $BuildJsonPath -Raw -Encoding utf8 | ConvertFrom-Json
+$sourceInstaller = [string]$build.installerPath
+$sourceZip = [string]$build.portableZipPath
+if ([string]::IsNullOrWhiteSpace($sourceInstaller) -or -not (Test-Path -LiteralPath $sourceInstaller)) {
+  throw "expected installer path from build json not found at $sourceInstaller"
+}
+if ($IncludeZip -and ([string]::IsNullOrWhiteSpace($sourceZip) -or -not (Test-Path -LiteralPath $sourceZip))) {
+  throw "expected portable zip path from build json not found at $sourceZip"
 }
 
 $versionedInstaller = "open-design-$ReleaseVersion$ReleaseAssetSuffix-win-x64-setup.exe"
@@ -81,4 +84,3 @@ $notes = if ([string]::IsNullOrWhiteSpace($ReleaseNotes)) {
   "releaseDate: `"$releaseDate`""
   "releaseNotes: `"$notes`""
 ) | Set-Content -Path (Join-Path $ReleaseAssetsDir "latest.yml") -Encoding utf8
-

@@ -128,7 +128,7 @@ on:
           - all
           - zip
           - dir
-        default: nsis
+        default: all
       linux_x64_smoke_mode:
         description: "Linux x64 smoke coverage."
         required: true
@@ -221,7 +221,7 @@ on:
       win_x64_target:
         required: false
         type: string
-        default: nsis
+        default: all
       linux_x64_smoke_mode:
         required: false
         type: string
@@ -620,7 +620,7 @@ jobs:
           .\.github\workflow\scripts\release\prepare-platform-assets.ps1 `
             -ReleaseTarget win_x64 `
             -ReleaseAssetsDir "C:\.tmp\runner\od-beta\win_x64\release-assets" `
-            -ToolsPackDir "C:\.tmp\runner\od-beta\win_x64\tools-pack" `
+            -BuildJsonPath "C:\.tmp\runner\od-beta\win_x64\build\build.json" `
             -ReleaseNamespace release-beta-win `
             -ReleaseVersion "${{ needs.metadata.outputs.beta_version }}" `
             -ReleaseAssetSuffix "${{ inputs.win_x64_sign_mode == 'on' && '.signed' || '.unsigned' }}" `
@@ -638,6 +638,7 @@ jobs:
           RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin }}
           RELEASE_REPORT_DIR: C:\.tmp\runner\od-beta\win_x64\release-report\win_x64
           RELEASE_REPORT_ZIP_PATH: C:\.tmp\runner\od-beta\win_x64\release-report\win_x64-report.zip
+          WIN_INCLUDE_ZIP: ${{ inputs.win_x64_target == 'all' || inputs.win_x64_target == 'zip' }}
           RELEASE_SIGNED: ${{ inputs.win_x64_sign_mode == 'on' && 'true' || 'false' }}
           RELEASE_STORAGE_ACCESS_KEY_ID: ${{ secrets.NEXU_S3_ACCESS_KEY_ID }}
           RELEASE_STORAGE_BUCKET: ${{ secrets.NEXU_S3_BUCKET }}
