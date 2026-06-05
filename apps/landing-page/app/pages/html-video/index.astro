@@ -83,7 +83,10 @@ const shots = {
 // Hardcoded snapshot — last manually verified. Used as fallback when the
 // GitHub API is unreachable at build time and as the dateline in the card.
 const SNAPSHOT_DATE = '2026-06-05';
-const FALLBACK_STARS = 'GitHub';
+// Numeric fallback for when the GitHub API is unreachable at build time;
+// the at-a-glance card shows this under a "GitHub stars" label, so it must
+// read as a count, not the word "GitHub".
+const FALLBACK_STARS = '775';
 const FALLBACK_LICENSE = 'Apache-2.0';
 
 type CopyPair = { headline: string; body: string };
@@ -165,7 +168,7 @@ const HTML_VIDEO_COPY_EN: HtmlVideoCopy = {
   heroAlt: 'html-video — HTML to video studio, animated template frames',
   glanceAria: 'At a glance',
   glance: {
-    stars: 'GitHub',
+    stars: 'GitHub stars',
     agents: 'Coding agents',
     templates: 'Video templates',
     engines: 'Render engine',
@@ -278,7 +281,7 @@ const HTML_VIDEO_COPY_ZH: HtmlVideoCopy = {
   heroAlt: 'html-video — HTML 转视频工作台，动画模板帧',
   glanceAria: '概览',
   glance: {
-    stars: 'GitHub',
+    stars: 'GitHub Star',
     agents: 'Coding agent',
     templates: '视频模板',
     engines: '渲染引擎',
@@ -640,3 +643,261 @@ const showcaseTiles = copy.showcase.map((tile, i) => ({
     </p>
   </section>
 </Layout>
+
+<style>
+  /* Page-local styles. Tokens come from globals.css; layout/typography
+   * follows the Atelier Zero conventions used in sub-pages.css. Mirrors the
+   * HTML Anything page's style block, adapted to this page's class names. */
+
+  .ha-cta {
+    margin-top: 1.25rem;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .ha-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1rem;
+    border: 1px solid var(--ink, #1a1a1a);
+    border-radius: 999px;
+    font-size: 0.95rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .ha-btn:hover { background: var(--ink, #1a1a1a); color: var(--paper, #efe7d2); }
+  .ha-btn-primary { background: var(--ink, #1a1a1a); color: var(--paper, #efe7d2); }
+  .ha-btn-primary:hover { background: transparent; color: inherit; }
+
+  .ha-hero-figure {
+    margin: 2rem 0 0 0;
+    padding: 0;
+  }
+  .ha-hero-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.06);
+  }
+
+  .ha-glance {
+    margin: 3rem 0;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    padding: 1.25rem 0;
+  }
+  .ha-glance ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.5rem 2rem;
+  }
+  .ha-glance li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .ha-glance .num {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    font-size: 2.25rem;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .ha-glance .lbl {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+  }
+  .ha-glance-foot {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    opacity: 0.6;
+  }
+
+  .ha-section { margin: 4rem 0; }
+  .ha-h2 {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    font-size: 2rem;
+    line-height: 1.15;
+    margin: 0 0 1rem 0;
+  }
+  .ha-section-lead {
+    max-width: 60ch;
+    font-size: 1.05rem;
+    line-height: 1.55;
+    opacity: 0.85;
+    margin: 0 0 2rem 0;
+  }
+
+  .ha-ideas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 2rem;
+  }
+  .ha-idea h3 {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    font-size: 1.25rem;
+    margin: 0 0 0.5rem 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .ha-idea p { margin: 0; line-height: 1.55; opacity: 0.85; }
+  .ha-tag {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    opacity: 0.65;
+    white-space: nowrap;
+  }
+
+  .ha-flow {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0;
+  }
+  .ha-flow li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1.5rem;
+    padding: 1.5rem 0;
+    border-top: 1px solid currentColor;
+  }
+  .ha-flow li:last-child { border-bottom: 1px solid currentColor; }
+  .step-num {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    font-size: 1.5rem;
+    opacity: 0.5;
+  }
+  .step-body { display: grid; gap: 0.5rem; }
+  .ha-flow h3 {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    margin: 0;
+    font-size: 1.2rem;
+  }
+  .ha-flow p { margin: 0; line-height: 1.55; opacity: 0.85; max-width: 64ch; }
+
+  .ha-showcase {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+  }
+  .ha-showcase figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .ha-showcase img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.03);
+  }
+  .ha-showcase figcaption {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+
+  .ha-surfaces {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+  .ha-surfaces li {
+    border: 1px solid currentColor;
+    padding: 1rem 1.1rem;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .ha-surfaces h3 {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    font-size: 1.05rem;
+    margin: 0;
+  }
+  .ha-surfaces p {
+    font-size: 0.9rem;
+    line-height: 1.45;
+    opacity: 0.75;
+    margin: 0;
+  }
+
+  .ha-agents {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .ha-agents li {
+    border: 1px solid currentColor;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+  }
+
+  .ha-roadmap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2rem;
+  }
+  .ha-roadmap-col h3 {
+    font-family: var(--font-display, 'GT Sectra', Georgia, serif);
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 0.75rem 0;
+    opacity: 0.7;
+  }
+  .ha-roadmap-col ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.4rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .ha-tieback {
+    margin: 5rem 0 3rem 0;
+    padding: 2rem 0;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+  }
+  .ha-tieback p {
+    max-width: 60ch;
+    line-height: 1.6;
+    margin: 0 0 1rem 0;
+  }
+  .ha-tieback .ha-cta {
+    margin-top: 0;
+  }
+</style>
