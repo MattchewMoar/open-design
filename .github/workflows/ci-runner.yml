@@ -7,8 +7,9 @@ on:
         description: Shared CI script mode to run
         required: true
         type: choice
-        default: setup
+        default: all
         options:
+          - all
           - probe
           - setup
           - policy
@@ -22,36 +23,252 @@ on:
 permissions:
   contents: read
 
+env:
+  OD_CI_ALLOW_DOCKER: "1"
+  OD_CI_INSTALL_TIMEOUT_SECONDS: "1500"
+  OD_CI_LANE: runner
+  OD_CI_PNPM_FETCH_RETRIES: "6"
+  OD_CI_PNPM_FETCH_RETRY_MAXTIMEOUT: "120000"
+  OD_CI_PNPM_FETCH_RETRY_MINTIMEOUT: "20000"
+  OD_CI_PNPM_INSTALL_FLAGS: "--frozen-lockfile --prefer-offline --network-concurrency=8"
+  OD_CI_PNPM_NETWORK_TIMEOUT: "180000"
+  OD_CI_PNPM_STORE_DIR: /home/runner/.cache/open-design-ci/pnpm-store
+  OD_CI_PLAYWRIGHT_INSTALL_FLAGS: "chromium"
+  OD_CI_STEP_TIMEOUT_SECONDS: "600"
+
 jobs:
   probe:
-    name: Runner CI ${{ inputs.mode }}
+    name: Runner CI probe
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'probe' }}
     runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
-    timeout-minutes: 45
+    timeout-minutes: 10
     env:
-      OD_CI_ALLOW_DOCKER: "1"
-      OD_CI_INSTALL_TIMEOUT_SECONDS: "1500"
-      OD_CI_LANE: runner
-      OD_CI_MODE: ${{ inputs.mode }}
-      OD_CI_PNPM_FETCH_RETRIES: "6"
-      OD_CI_PNPM_FETCH_RETRY_MAXTIMEOUT: "120000"
-      OD_CI_PNPM_FETCH_RETRY_MINTIMEOUT: "20000"
-      OD_CI_PNPM_INSTALL_FLAGS: "--frozen-lockfile --prefer-offline --network-concurrency=8"
-      OD_CI_PNPM_NETWORK_TIMEOUT: "180000"
-      OD_CI_PNPM_STORE_DIR: /home/runner/.cache/open-design-ci/pnpm-store
-      OD_CI_PLAYWRIGHT_INSTALL_FLAGS: "chromium"
-      OD_CI_STEP_TIMEOUT_SECONDS: "600"
+      OD_CI_MODE: probe
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
 
       - name: Run CI script
-        run: .github/workflows/scripts/ci.sh "${{ inputs.mode }}"
+        run: .github/workflows/scripts/ci.sh probe
 
       - name: Upload CI manifest
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-runner-${{ inputs.mode }}-${{ github.run_id }}
+          name: ci-runner-probe-${{ github.run_id }}
           path: .od/ci/*-manifest.json
           if-no-files-found: warn
           retention-days: 7
+
+  setup:
+    name: Runner CI setup
+    if: ${{ inputs.mode == 'setup' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 30
+    env:
+      OD_CI_MODE: setup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh setup
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-setup-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  policy:
+    name: Runner CI policy
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'policy' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 30
+    env:
+      OD_CI_MODE: policy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh policy
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-policy-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  unit:
+    name: Runner CI unit
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'unit' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 30
+    env:
+      OD_CI_MODE: unit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh unit
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-unit-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  typecheck:
+    name: Runner CI typecheck
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'typecheck' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 30
+    env:
+      OD_CI_MODE: typecheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh typecheck
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-typecheck-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  daemon:
+    name: Runner CI daemon
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'daemon' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 45
+    env:
+      OD_CI_MODE: daemon
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh daemon
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-daemon-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  web:
+    name: Runner CI web
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'web' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 30
+    env:
+      OD_CI_MODE: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh web
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-web-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  build:
+    name: Runner CI build
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'build' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 30
+    env:
+      OD_CI_MODE: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh build
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-build-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  browser:
+    name: Runner CI browser
+    if: ${{ inputs.mode == 'all' || inputs.mode == 'browser' }}
+    runs-on: [self-hosted, Linux, ARM64, nexu-spark, open-design-ci]
+    timeout-minutes: 45
+    env:
+      OD_CI_MODE: browser
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Run CI script
+        run: .github/workflows/scripts/ci.sh browser
+
+      - name: Upload CI manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-browser-${{ github.run_id }}
+          path: .od/ci/*-manifest.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  gate:
+    name: Runner CI gate
+    needs:
+      - probe
+      - setup
+      - policy
+      - unit
+      - typecheck
+      - daemon
+      - web
+      - build
+      - browser
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check runner CI jobs
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$NEEDS_JSON" | jq .
+          failures="$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key)=\(.value.result)"')"
+          if [ -n "$failures" ]; then
+            echo "Runner CI failed:"
+            echo "$failures"
+            exit 1
+          fi
