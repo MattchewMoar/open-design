@@ -302,6 +302,8 @@ test('[P0] visiting an uploaded design file route restores its tab and file work
   });
   const fileTab = tabBySuffix(page, 'deep-linked-reference.png');
   await expect(fileTab).toBeVisible();
+  const uploadedName = await fileTab.getAttribute('title');
+  expect(uploadedName).toBeTruthy();
 
   await page.getByTestId('design-files-tab').click();
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
@@ -318,11 +320,10 @@ test('[P0] visiting an uploaded design file route restores its tab and file work
     throw new Error(`unexpected project route: ${current.pathname}`);
   }
 
-  await gotoProjectRoute(page, `/projects/${projectId}/files/deep-linked-reference.png`);
+  await gotoProjectRoute(page, `/projects/${projectId}/files/${encodeURIComponent(uploadedName!)}`);
 
   await expect(page.getByTestId('file-workspace')).toBeVisible();
   await expect(fileTab).toBeVisible();
-  await fileTab.click();
   await expect(fileTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'false');
 });
@@ -1592,6 +1593,10 @@ test('[P0] returning from a file deep-link to the project root keeps the chosen 
       'base64',
     ),
   });
+  const uploadedFileTab = tabBySuffix(page, 'conversation-root-file.png');
+  await expect(uploadedFileTab).toBeVisible();
+  const uploadedName = await uploadedFileTab.getAttribute('title');
+  expect(uploadedName).toBeTruthy();
 
   await page.getByTestId('conversation-history-trigger').click();
   const historyList = page.getByTestId('conversation-list');
@@ -1606,11 +1611,10 @@ test('[P0] returning from a file deep-link to the project root keeps the chosen 
   await expect(page.locator('.msg.user .user-text').filter({ hasText: firstPrompt }).first()).toBeVisible();
   await expect(page.locator('.msg.user .user-text').filter({ hasText: secondPrompt })).toHaveCount(0);
 
-  await gotoProjectRoute(page, `/projects/${projectId}/files/conversation-root-file.png`);
+  await gotoProjectRoute(page, `/projects/${projectId}/files/${encodeURIComponent(uploadedName!)}`);
 
   const fileTab = tabBySuffix(page, 'conversation-root-file.png');
   await expect(fileTab).toBeVisible();
-  await fileTab.click();
   await expect(fileTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'false');
 
