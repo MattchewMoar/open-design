@@ -10,6 +10,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import process from "node:process";
@@ -332,7 +333,7 @@ describe("copyOptionalVelaCliBinary", () => {
 });
 
 describe("copyBundledPlaywrightChromium", () => {
-  it("copies the Chromium revision tree into packaged resources", async () => {
+  it("copies the headed Chromium and headless shell revision trees into packaged resources", async () => {
     const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-playwright-"));
     const resourceRoot = join(root, "resources", "open-design");
     const sourceExecutablePath = join(
@@ -352,6 +353,20 @@ describe("copyBundledPlaywrightChromium", () => {
         "license\n",
         "utf8",
       );
+      await mkdir(join(root, "ms-playwright", "chromium_headless_shell-1234", "chrome-headless-shell-linux64"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(
+          root,
+          "ms-playwright",
+          "chromium_headless_shell-1234",
+          "chrome-headless-shell-linux64",
+          "README",
+        ),
+        "headless shell\n",
+        "utf8",
+      );
 
       const copied = await copyBundledPlaywrightChromium({
         workspaceRoot: root,
@@ -359,15 +374,69 @@ describe("copyBundledPlaywrightChromium", () => {
         sourceExecutablePath,
       });
 
-      expect(copied.sourceRoot).toBe(join(root, "ms-playwright", "chromium-1234"));
-      expect(copied.targetRoot).toBe(join(resourceRoot, "ms-playwright", "chromium-1234"));
+      expect(copied.sourceRoots).toEqual([
+        join(root, "ms-playwright", "chromium-1234"),
+        join(root, "ms-playwright", "chromium_headless_shell-1234"),
+      ]);
+      expect(copied.targetRoots).toEqual([
+        join(resourceRoot, "ms-playwright", "chromium-1234"),
+        join(resourceRoot, "ms-playwright", "chromium_headless_shell-1234"),
+      ]);
       await expect(
         readFile(
           join(resourceRoot, "ms-playwright", "chromium-1234", "chrome-linux", "LICENSE"),
           "utf8",
         ),
       ).resolves.toBe("license\n");
+      await expect(
+        readFile(
+          join(
+            resourceRoot,
+            "ms-playwright",
+            "chromium_headless_shell-1234",
+            "chrome-headless-shell-linux64",
+            "README",
+          ),
+          "utf8",
+        ),
+      ).resolves.toBe("headless shell\n");
     } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("copies a Playwright cache that chromium.launch() can use in headless mode", async () => {
+    const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-playwright-launch-"));
+    const resourceRoot = join(root, "resources", "open-design");
+    const workspaceRoot = process.cwd();
+    const daemonRequire = createRequire(join(workspaceRoot, "apps", "daemon", "package.json"));
+    const { chromium } = daemonRequire("playwright") as {
+      chromium: { launch: () => Promise<{ close: () => Promise<void> }> };
+    };
+    const originalBrowsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+
+    try {
+      const copied = await copyBundledPlaywrightChromium({
+        workspaceRoot,
+        resourceRoot,
+      });
+      process.env.PLAYWRIGHT_BROWSERS_PATH = join(resourceRoot, "ms-playwright");
+
+      const browser = await chromium.launch();
+      await browser.close();
+
+      expect(copied.sourceRoots.some((rootPath) => /chromium_headless_shell-\d+$/i.test(rootPath))).toBe(true);
+      await expect(
+        access(
+          copied.targetRoots.find((rootPath) => /chromium_headless_shell-\d+$/i.test(rootPath))!,
+        ),
+      ).resolves.toBeUndefined();
+    } finally {
+      if (originalBrowsersPath == null) {
+        delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+      } else {
+        process.env.PLAYWRIGHT_BROWSERS_PATH = originalBrowsersPath;
+      }
       await rm(root, { force: true, recursive: true });
     }
   });

@@ -89,14 +89,18 @@ export async function copyBundledPlaywrightChromium({
   resourceRoot: string;
   sourceExecutablePath?: string;
   workspaceRoot: string;
-}): Promise<{ sourceRoot: string; targetRoot: string }> {
+}): Promise<{ sourceRoots: string[]; targetRoots: string[] }> {
   const executablePath = sourceExecutablePath ?? resolveDaemonPlaywrightChromiumExecutablePath(workspaceRoot);
   await access(executablePath);
-  const sourceRoot = resolveChromiumBundleRoot(executablePath);
-  const targetRoot = join(resourceRoot, "ms-playwright", basename(sourceRoot));
-  await mkdir(dirname(targetRoot), { recursive: true });
-  await cp(sourceRoot, targetRoot, { recursive: true });
-  return { sourceRoot, targetRoot };
+  const sourceRoots = await resolveChromiumBundleRoots(executablePath);
+  const targetRoots: string[] = [];
+  for (const sourceRoot of sourceRoots) {
+    const targetRoot = join(resourceRoot, "ms-playwright", basename(sourceRoot));
+    await mkdir(dirname(targetRoot), { recursive: true });
+    await cp(sourceRoot, targetRoot, { recursive: true });
+    targetRoots.push(targetRoot);
+  }
+  return { sourceRoots, targetRoots };
 }
 
 function resolveDaemonPlaywrightChromiumExecutablePath(workspaceRoot: string): string {
@@ -122,4 +126,22 @@ function resolveChromiumBundleRoot(executablePath: string): string {
     current = parent;
   }
   throw new Error(`tools-pack: unable to locate Chromium bundle root for ${executablePath}`);
+}
+
+async function resolveChromiumBundleRoots(executablePath: string): Promise<string[]> {
+  const primaryRoot = resolveChromiumBundleRoot(executablePath);
+  const match = basename(primaryRoot).match(/^chromium(?:_headless_shell)?-(\d+)$/i);
+  if (!match) return [primaryRoot];
+  const revision = match[1];
+  const parent = dirname(primaryRoot);
+  const variants = [
+    join(parent, `chromium-${revision}`),
+    join(parent, `chromium_headless_shell-${revision}`),
+  ];
+  const roots: string[] = [];
+  for (const variantRoot of variants) {
+    await access(variantRoot);
+    roots.push(variantRoot);
+  }
+  return roots;
 }
