@@ -765,6 +765,10 @@ export interface HomePageCopy {
     lead: string;
     chips: readonly string[];
     cta: string;
+    /** aria-label for the vendor-logo row (screen-reader only). */
+    logosAriaLabel: string;
+    /** aria-label for the trailing "…" item that signals "and more". */
+    moreAriaLabel: string;
   };
   cta: {
     rule: string;
@@ -2678,6 +2682,8 @@ const HOME_PAGE_COPY_EN: HomePageCopy = {
       'Real token-based billing',
     ],
     cta: 'Explore AMR',
+    logosAriaLabel: 'Built-in frontier models',
+    moreAriaLabel: 'and more',
   },
   cta: {
     rule: 'Contact / Conversation',
@@ -2976,6 +2982,8 @@ const HOME_PAGE_COPY: Partial<Record<LandingLocaleCode, HomePageCopy>> = {
         '真实 Token 计费',
       ],
       cta: '了解 AMR',
+      logosAriaLabel: '内置的前沿模型',
+      moreAriaLabel: '以及更多',
     },
     cta: {
       rule: '联系 / 对话',
@@ -3045,6 +3053,8 @@ HOME_PAGE_COPY['zh-tw'] = {
     lead: '一次儲值即可使用 GPT、Claude、Gemini、DeepSeek。AMR 自動為每一步路由到最合適的前沿模型，依真實 Token 用量計費，在同一個控制台查看錢包餘額和請求記錄。',
     chips: ['20+ 旗艦模型', '零配置即用', 'SOTA Harness For Design', '真實 Token 計費'],
     cta: '了解 AMR',
+    logosAriaLabel: '內建的前沿模型',
+    moreAriaLabel: '以及更多',
   },
   rail: {
     right: 'Open Design — 第 01 卷 · 第 26 期 · Apache-2.0',
@@ -4311,6 +4321,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: '一度チャージするだけで GPT、Claude、Gemini、DeepSeek を利用可能。AMR が各ステップを最適なフロンティアモデルへ自動ルーティングし、実際のトークン使用量で課金。ウォレット残高とリクエスト履歴は同じコンソールで確認できます。',
       chips: ['20+ のフラッグシップモデル', 'ゼロ設定', 'SOTA Harness For Design', '実トークン課金'],
       cta: 'AMR を見る',
+      logosAriaLabel: '内蔵のフロンティアモデル',
+      moreAriaLabel: 'ほか',
     },
     hero: {
       label: 'オープンソース・デザインスタジオ',
@@ -4338,6 +4350,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: '한 번 충전하면 GPT, Claude, Gemini, DeepSeek를 사용할 수 있습니다. AMR이 각 단계를 최적의 프런티어 모델로 자동 라우팅하고 실제 토큰 사용량으로 과금하며, 지갑 잔액과 요청 기록을 하나의 콘솔에서 확인할 수 있습니다.',
       chips: ['20+ 플래그십 모델', '제로 설정', 'SOTA Harness For Design', '실제 토큰 과금'],
       cta: 'AMR 살펴보기',
+      logosAriaLabel: '내장된 프런티어 모델',
+      moreAriaLabel: '그 외 더 보기',
     },
     hero: {
       label: '오픈소스 디자인 스튜디오',
@@ -4365,6 +4379,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Einmal aufladen und GPT, Claude, Gemini und DeepSeek nutzen. AMR routet jeden Schritt automatisch zum passenden Frontier-Modell, rechnet nach realem Token-Verbrauch ab und zeigt Guthaben und Anfrageverlauf in einer Konsole.',
       chips: ['20+ Flaggschiff-Modelle', 'Keine Einrichtung', 'SOTA Harness For Design', 'Abrechnung nach echten Tokens'],
       cta: 'AMR entdecken',
+      logosAriaLabel: 'Integrierte Frontier-Modelle',
+      moreAriaLabel: 'und mehr',
     },
     hero: {
       label: 'Open-Source-Designstudio',
@@ -4392,6 +4408,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Rechargez une fois et accédez à GPT, Claude, Gemini et DeepSeek. AMR route automatiquement chaque étape vers le bon modèle de pointe, facture à l’usage réel de tokens et réunit solde et historique des requêtes dans une seule console.',
       chips: ['20+ modèles phares', 'Zéro configuration', 'SOTA Harness For Design', 'Facturation au token réel'],
       cta: 'Découvrir AMR',
+      logosAriaLabel: 'Modèles de pointe intégrés',
+      moreAriaLabel: 'et plus encore',
     },
     hero: {
       label: 'Studio de design open source',
@@ -4419,6 +4437,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Пополните счёт один раз и используйте GPT, Claude, Gemini и DeepSeek. AMR автоматически направляет каждый шаг к подходящей передовой модели, тарифицирует по реальному расходу токенов и показывает баланс и историю запросов в одной консоли.',
       chips: ['20+ флагманских моделей', 'Нулевая настройка', 'SOTA Harness For Design', 'Оплата по реальным токенам'],
       cta: 'Узнать об AMR',
+      logosAriaLabel: 'Встроенные передовые модели',
+      moreAriaLabel: 'и другие',
     },
     hero: {
       label: 'Open-source дизайн-студия',
@@ -4446,6 +4466,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Recarga una vez y usa GPT, Claude, Gemini y DeepSeek. AMR enruta automáticamente cada paso al modelo de frontera adecuado, factura por el uso real de tokens y reúne saldo e historial de solicitudes en una sola consola.',
       chips: ['20+ modelos insignia', 'Cero configuración', 'SOTA Harness For Design', 'Facturación por tokens reales'],
       cta: 'Explorar AMR',
+      logosAriaLabel: 'Modelos de frontera integrados',
+      moreAriaLabel: 'y más',
     },
     hero: {
       label: 'Estudio de diseño open source',
@@ -4473,6 +4495,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Recarregue uma vez e use GPT, Claude, Gemini e DeepSeek. O AMR roteia automaticamente cada etapa para o modelo de fronteira certo, cobra pelo uso real de tokens e reúne saldo e histórico de solicitações em um único console.',
       chips: ['20+ modelos de ponta', 'Configuração zero', 'SOTA Harness For Design', 'Cobrança por tokens reais'],
       cta: 'Conhecer o AMR',
+      logosAriaLabel: 'Modelos de fronteira integrados',
+      moreAriaLabel: 'e mais',
     },
     hero: {
       label: 'Estúdio de design open source',
@@ -4500,6 +4524,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Ricarica una volta e usa GPT, Claude, Gemini e DeepSeek. AMR instrada automaticamente ogni passaggio verso il modello di frontiera giusto, fattura in base al consumo reale di token e raccoglie saldo e cronologia delle richieste in un’unica console.',
       chips: ['20+ modelli di punta', 'Zero configurazione', 'SOTA Harness For Design', 'Fatturazione a token reali'],
       cta: 'Scopri AMR',
+      logosAriaLabel: 'Modelli di frontiera integrati',
+      moreAriaLabel: 'e altri',
     },
     hero: {
       label: 'Studio di design open source',
@@ -4527,6 +4553,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Nạp một lần và dùng GPT, Claude, Gemini và DeepSeek. AMR tự động định tuyến mỗi bước tới mô hình tiên tiến phù hợp, tính phí theo lượng token thực tế và hiển thị số dư cùng lịch sử yêu cầu trong cùng một bảng điều khiển.',
       chips: ['20+ mô hình hàng đầu', 'Không cần cấu hình', 'SOTA Harness For Design', 'Tính phí theo token thực'],
       cta: 'Khám phá AMR',
+      logosAriaLabel: 'Mô hình tiên tiến tích hợp sẵn',
+      moreAriaLabel: 'và nhiều hơn nữa',
     },
     hero: {
       label: 'Studio thiết kế mã nguồn mở',
@@ -4554,6 +4582,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Doładuj raz i korzystaj z GPT, Claude, Gemini i DeepSeek. AMR automatycznie kieruje każdy krok do właściwego modelu frontier, rozlicza według rzeczywistego zużycia tokenów i pokazuje saldo oraz historię żądań w jednej konsoli.',
       chips: ['20+ flagowych modeli', 'Zero konfiguracji', 'SOTA Harness For Design', 'Rozliczenie za realne tokeny'],
       cta: 'Poznaj AMR',
+      logosAriaLabel: 'Wbudowane modele frontier',
+      moreAriaLabel: 'i więcej',
     },
     hero: {
       label: 'Studio designu open source',
@@ -4581,6 +4611,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Isi saldo sekali dan pakai GPT, Claude, Gemini, dan DeepSeek. AMR otomatis merutekan setiap langkah ke model frontier yang tepat, menagih berdasarkan pemakaian token nyata, dan menyatukan saldo serta riwayat permintaan dalam satu konsol.',
       chips: ['20+ model unggulan', 'Tanpa konfigurasi', 'SOTA Harness For Design', 'Tagihan per token nyata'],
       cta: 'Jelajahi AMR',
+      logosAriaLabel: 'Model frontier bawaan',
+      moreAriaLabel: 'dan lainnya',
     },
     hero: {
       label: 'Studio desain open source',
@@ -4608,6 +4640,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Eén keer opwaarderen en GPT, Claude, Gemini en DeepSeek gebruiken. AMR routeert elke stap automatisch naar het juiste frontier-model, rekent af op werkelijk tokengebruik en toont saldo en aanvraaggeschiedenis in één console.',
       chips: ['20+ vlaggenschipmodellen', 'Geen configuratie', 'SOTA Harness For Design', 'Afrekenen op echte tokens'],
       cta: 'Ontdek AMR',
+      logosAriaLabel: 'Ingebouwde frontier-modellen',
+      moreAriaLabel: 'en meer',
     },
     hero: {
       label: 'Open-source designstudio',
@@ -4635,6 +4669,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'اشحن مرة واحدة واستخدم GPT و Claude و Gemini و DeepSeek. يوجّه AMR كل خطوة تلقائيًا إلى النموذج الرائد المناسب، ويحاسب حسب الاستهلاك الفعلي للتوكنات، ويعرض الرصيد وسجل الطلبات في وحدة تحكم واحدة.',
       chips: ['أكثر من 20 نموذجًا رائدًا', 'بدون إعداد', 'SOTA Harness For Design', 'محاسبة بالتوكن الفعلي'],
       cta: 'استكشف AMR',
+      logosAriaLabel: 'نماذج رائدة مدمجة',
+      moreAriaLabel: 'والمزيد',
     },
     hero: {
       label: 'استوديو تصميم مفتوح المصدر',
@@ -4662,6 +4698,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Bir kez yükleyin; GPT, Claude, Gemini ve DeepSeek’i kullanın. AMR her adımı otomatik olarak doğru sınır modeline yönlendirir, gerçek token kullanımına göre ücretlendirir ve bakiye ile istek geçmişini tek konsolda gösterir.',
       chips: ['20+ amiral gemisi model', 'Sıfır kurulum', 'SOTA Harness For Design', 'Gerçek token bazlı faturalama'],
       cta: 'AMR’yi keşfedin',
+      logosAriaLabel: 'Yerleşik sınır modelleri',
+      moreAriaLabel: 've daha fazlası',
     },
     hero: {
       label: 'Açık kaynak tasarım stüdyosu',
@@ -4689,6 +4727,8 @@ const HOME_PAGE_COPY_OVERRIDES: Partial<Record<LandingLocaleCode, DeepPartial<Ho
       lead: 'Поповніть рахунок один раз і користуйтеся GPT, Claude, Gemini та DeepSeek. AMR автоматично спрямовує кожен крок до відповідної передової моделі, тарифікує за реальним використанням токенів і показує баланс та історію запитів в одній консолі.',
       chips: ['20+ флагманських моделей', 'Нуль налаштувань', 'SOTA Harness For Design', 'Оплата за реальні токени'],
       cta: 'Дізнатися про AMR',
+      logosAriaLabel: 'Вбудовані передові моделі',
+      moreAriaLabel: 'та інші',
     },
     hero: {
       label: 'Open-source дизайн-студія',

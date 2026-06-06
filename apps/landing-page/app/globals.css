@@ -461,7 +461,7 @@ body.newsletter-popup-visible .side-rail.right {
 
   /* Scale the header chrome up a step so the bar reads as substantial across
    * the now-full-width layout, rather than small elements floating in extra
-   * whitespace. Desktop-only; sizes return to base below 1081px. Selectors
+   * whitespace. Desktop-only; sizes return to base below 1281px. Selectors
    * are deliberately one level more specific than the base rules below
    * (which appear later in source) so these win without !important. */
   .nav .nav-inner .brand-logo { height: 44px; }
@@ -675,7 +675,7 @@ body.newsletter-popup-visible .side-rail.right {
 }
 
 /*
- * Hamburger toggle. Hidden at desktop widths (≥1080px). At narrower
+ * Hamburger toggle. Hidden at desktop widths (≥1281px). At narrower
  * viewports it replaces the inline nav-links and toggles a panel
  * underneath the header bar via a small handler in `header-enhancer`.
  */
@@ -760,9 +760,9 @@ body.newsletter-popup-visible .side-rail.right {
 .nav-amr {
   /* AMR pill is a "nice to have" entry point — AMR is also reachable via the
    * Agent dropdown. It only earns its slot in the side actions at wide
-   * viewports (≥1460px); below that it is hidden so longer-copy locales
+   * viewports (≥1520px); below that it is hidden so longer-copy locales
    * (Japanese, German, Russian) never get their nav links pushed into the
-   * right-hand CTAs. Shown by the min-width:1460 block further down. */
+   * right-hand CTAs. Shown by the min-width:1520 block further down. */
   display: none;
   align-items: center;
   justify-content: center;
@@ -2888,8 +2888,8 @@ footer {
 @media (max-width: 1200px) {
   .topbar-inner .mid { display: none; }
 }
-/* nav: 1281–1459px is the desktop band after the ≤1280px hamburger but
- * before the AMR pill is allowed in (≥1460px). The brand tail + six nav
+/* nav: 1281–1519px is the desktop band after the ≤1280px hamburger but
+ * before the AMR pill is allowed in (≥1520px). The brand tail + six nav
  * dropdowns + Star + Download still crowd the row in longer-copy locales
  * (Japanese, German), so drop the brand sub-meta and the social icons and
  * tighten link spacing so the Star CTA never has to compress. */
@@ -2900,12 +2900,12 @@ footer {
   .nav-side .nav-icon { display: none; }
 }
 
-/* nav: at ≤1180px there's no clean way to fit the six localized nav
+/* nav: at ≤1280px there's no clean way to fit the six localized nav
  * dropdowns + Download + Star in one row — and longer-copy locales
- * (German "Lösungen / Ressourcen", French, Russian, pt-BR) overran the
- * row and collided with the right-hand CTAs in the 1081–1180px band even
- * after the AMR pill was retired. So swap to a hamburger panel at ≤1180px
- * for every locale. Star CTA stays visible in the bar (it's the
+ * (German "Lösungen / Ressourcen", French, Russian, pt-BR, Japanese)
+ * overran the row and collided with the right-hand CTAs in the desktop
+ * band even after the AMR pill was retired. So swap to a hamburger panel
+ * at ≤1280px for every locale. Star CTA stays visible in the bar (it's the
  * social-proof CTA); Download moves into the panel. The Product submenu
  * flattens from a hover-popup to an always-expanded inline list, since
  * hover doesn't translate to touch.
@@ -3067,7 +3067,7 @@ footer {
   .foot-bottom { flex-direction: column; align-items: flex-start; gap: 12px; }
   .foot-bottom .right { flex-wrap: wrap; gap: 12px 20px; }
   /* nav — at ≤880px tighten padding; nav-links stay reachable through
-   * the hamburger panel introduced at ≤1080px. Brand meta, Star, AMR,
+   * the hamburger panel introduced at ≤1280px. Brand meta, Star, AMR,
    * and the Discord/X icon buttons stay hidden; Download CTA stays
    * reachable in the bar. */
   .nav { padding: 16px 0; }

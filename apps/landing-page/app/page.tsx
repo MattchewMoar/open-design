@@ -1132,7 +1132,7 @@ export default function Page({
               </ul>
               <ul
                 className='amr-band-logos'
-                aria-label='Built-in frontier models'
+                aria-label={home.amrBand.logosAriaLabel}
               >
                 {amrModelLogos.map((m) => (
                   <li key={m.slug}>
@@ -1147,7 +1147,7 @@ export default function Page({
                     />
                   </li>
                 ))}
-                <li className='amr-band-more' aria-label='and more'>
+                <li className='amr-band-more' aria-label={home.amrBand.moreAriaLabel}>
                   …
                 </li>
               </ul>
