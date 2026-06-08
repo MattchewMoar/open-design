@@ -62,6 +62,7 @@ import type {
   TweaksPopoverClickProps,
   CommentPopoverClickProps,
   ArtifactHeaderClickProps,
+  HandoffClickProps,
   PresentPopoverClickProps,
   ShareOptionPopoverClickProps,
   AssistantFeedbackButtonClickProps,
@@ -519,6 +520,13 @@ export function trackCommentPopoverClick(
 export function trackArtifactHeaderClick(
   track: Track,
   props: ArtifactHeaderClickProps,
+): void {
+  send(track, 'ui_click', props);
+}
+
+export function trackHandoffClick(
+  track: Track,
+  props: HandoffClickProps,
 ): void {
   send(track, 'ui_click', props);
 }
