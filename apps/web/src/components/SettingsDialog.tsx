@@ -1032,6 +1032,20 @@ export function SettingsDialog({
     };
   }, [initial.theme, initial.accentColor]);
 
+  useEffect(() => {
+    setCfg((current) => {
+      if (current.agentCliEnv === initial.agentCliEnv) return current;
+      return {
+        ...current,
+        agentCliEnv: initial.agentCliEnv,
+      };
+    });
+    autosaveLastSavedRef.current = {
+      ...autosaveLastSavedRef.current,
+      agentCliEnv: initial.agentCliEnv,
+    };
+  }, [initial.agentCliEnv]);
+
   // Revert the live theme preview to the most recently persisted appearance.
   // That is the initial appearance until autosave succeeds; after autosave,
   // closing Settings must not roll the document back to stale colors.

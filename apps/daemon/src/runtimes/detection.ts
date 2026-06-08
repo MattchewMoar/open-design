@@ -285,6 +285,7 @@ function rememberDetectedLiveModels(
   configuredEnv: Record<string, string>,
   agent: DetectedAgent,
 ): void {
+  if (def.id === 'amr' && agent.models.length === 0) return;
   const scope = def.id === 'amr'
     ? resolveAmrProfile({
         ...process.env,

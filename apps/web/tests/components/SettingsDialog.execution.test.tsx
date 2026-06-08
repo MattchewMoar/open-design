@@ -3515,6 +3515,55 @@ describe('SettingsDialog appearance interactions', () => {
     );
   });
 
+  it('reconciles the open settings draft when the parent agent CLI env changes', async () => {
+    const view = renderSettingsDialog(
+      {
+        mode: 'daemon',
+        agentId: 'amr',
+        theme: 'dark',
+        agentCliEnv: {
+          amr: { OPEN_DESIGN_AMR_PROFILE: 'prod' },
+        },
+      },
+      { initialSection: 'appearance' },
+    );
+
+    view.rerender(
+      <SettingsDialog
+        initial={{
+          ...baseConfig,
+          mode: 'daemon',
+          agentId: 'amr',
+          theme: 'dark',
+          agentCliEnv: {
+            amr: { OPEN_DESIGN_AMR_PROFILE: 'local' },
+          },
+        }}
+        agents={availableAgents}
+        daemonLive={true}
+        appVersionInfo={null}
+        initialSection="appearance"
+        onPersist={view.onPersist}
+        onPersistComposioKey={view.onPersistComposioKey}
+        onClose={view.onClose}
+        onRefreshAgents={view.onRefreshAgents}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Light' }));
+
+    await waitForPersist(
+      view.onPersist,
+      expect.objectContaining({
+        theme: 'light',
+        agentCliEnv: {
+          amr: { OPEN_DESIGN_AMR_PROFILE: 'local' },
+        },
+      }),
+      {},
+    );
+  });
+
   it('switches back to the default accent color and persists it explicitly', async () => {
     const { onPersist } = renderSettingsDialog(
       { mode: 'daemon', agentId: 'codex', theme: 'light', accentColor: '#2563eb' },
