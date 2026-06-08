@@ -357,13 +357,61 @@ jobs:
               const signals = (triage.failedTests.length ? triage.failedTests : triage.reasons)
                 .map(normalizeFingerprintPart)
                 .sort();
+              const fallbackJobs = triage.failedTests.length
+                ? []
+                : problemJobs
+                    .map((job) => `${normalizeFingerprintPart(job.name)}:${normalizeFingerprintPart(job.conclusion)}`)
+                    .sort();
               return JSON.stringify({
                 workflow: normalizeFingerprintPart(runName),
                 conclusion: conclusion === 'timed_out' ? 'timed_out' : 'failure',
                 category: normalizeFingerprintPart(triage.category),
+                fallbackJobs,
                 signals,
               });
             }
+
+            function assertFailureFingerprintFixtures() {
+              const baseTriage = {
+                category: '非 UI CI 失败',
+                confidence: '低',
+                reasons: ['未命中明确规则'],
+                failedTests: [],
+                suggestedAction: '查看失败 job 日志定位 build/test/lint 具体阶段。',
+              };
+              const lintFingerprint = failureFingerprint({
+                runName: 'ci',
+                conclusion: 'failure',
+                problemJobs: [{ name: 'lint', conclusion: 'failure' }],
+                triage: baseTriage,
+              });
+              const unitFingerprint = failureFingerprint({
+                runName: 'ci',
+                conclusion: 'failure',
+                problemJobs: [{ name: 'unit tests', conclusion: 'failure' }],
+                triage: baseTriage,
+              });
+              if (lintFingerprint === unitFingerprint) {
+                throw new Error('Non-UI fallback fingerprints must include failed job discriminators');
+              }
+
+              const uiTriage = {
+                ...baseTriage,
+                category: '疑似用例过时/选择器漂移',
+                failedTests: ['ui/example.test.ts:1:1 › [P0] stale selector'],
+              };
+              const uiFingerprint = failureFingerprint({
+                runName: 'ui-extended-main',
+                conclusion: 'failure',
+                problemJobs: [{ name: 'ui shard 1', conclusion: 'failure' }],
+                triage: uiTriage,
+              });
+              if (!JSON.parse(uiFingerprint).fallbackJobs || JSON.parse(uiFingerprint).fallbackJobs.length !== 0) {
+                throw new Error('UI fingerprints with parsed failed tests should not drift by job name');
+              }
+            }
+
+            assertFailureFingerprintFixtures();
 
             async function shouldSkipDuplicateAlert({ currentRun, currentFingerprint }) {
               if (isTest || !currentRun.workflow_id) return false;
