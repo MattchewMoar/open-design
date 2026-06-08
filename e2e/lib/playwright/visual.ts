@@ -11,6 +11,21 @@ const VISUAL_STYLE_ID = 'od-visual-stability-style';
 const VISUAL_GITHUB_REPO_API = 'https://api.github.com/repos/nexu-io/open-design';
 const VISUAL_GITHUB_STARS = 40_000;
 
+type VisualConfig = {
+  mode: 'daemon' | 'api';
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  apiProtocol?: 'anthropic' | 'openai' | 'azure' | 'google' | 'ollama' | 'senseaudio' | 'aihubmix';
+  agentId: string | null;
+  skillId: string | null;
+  designSystemId: string | null;
+  onboardingCompleted: boolean;
+  agentModels: Record<string, { model?: string; reasoning?: string }>;
+  privacyDecisionAt: number | null;
+  telemetry: { metrics?: boolean; content?: boolean; artifactManifest?: boolean };
+};
+
 const VISUAL_CONFIG = {
   mode: 'daemon',
   apiKey: '',
@@ -23,7 +38,7 @@ const VISUAL_CONFIG = {
   agentModels: {},
   privacyDecisionAt: 1,
   telemetry: { metrics: false, content: false, artifactManifest: false },
-} as const;
+} satisfies VisualConfig;
 
 const MOCK_AGENT = {
   id: 'mock',
@@ -58,7 +73,6 @@ const VISUAL_PROJECTS = [
 ] as const;
 
 type VisualProject = (typeof VISUAL_PROJECTS)[number];
-type VisualConfig = typeof VISUAL_CONFIG;
 
 type VisualPageOptions = {
   projects?: readonly VisualProject[];
