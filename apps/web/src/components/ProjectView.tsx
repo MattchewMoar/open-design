@@ -99,6 +99,7 @@ import { randomUUID } from '../utils/uuid';
 import { DEFAULT_NOTIFICATIONS } from '../state/config';
 import type { TodoItem } from '../runtime/todos';
 import { appendErrorStatusEvent } from '../runtime/chat-events';
+import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
 import {
   buildDesignSystemPackageAuditRepairPrompt,
   summarizeDesignSystemPackageAudit,
@@ -3773,16 +3774,7 @@ export function ProjectView({
   const handleResumeRun = useCallback(
     (_assistantMessage: ChatMessage) => {
       if (currentConversationActionDisabled) return;
-      // Phrased to be correct whether or not a committed boundary exists: the
-      // daemon only flags `resumable` when a tool/artifact block was committed,
-      // but keep the wording robust so it never claims work the agent can't see.
-      const prompt =
-        'The previous turn was interrupted by a transient failure. ' +
-        'If your last response was cut off, continue it from where you left ' +
-        'off and keep any work already completed; otherwise complete the ' +
-        'original request. Inspect the current project files as needed before ' +
-        'making further changes.';
-      void handleSend(prompt, [], [], { entryFrom: 'resume_continue' });
+      void handleSend(RESUME_CONTINUE_PROMPT, [], [], { entryFrom: 'resume_continue' });
     },
     [currentConversationActionDisabled, handleSend],
   );

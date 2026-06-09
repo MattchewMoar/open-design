@@ -68,11 +68,12 @@ function resumableFailedMessage(): ChatMessage {
   };
 }
 
-function renderChat(
-  onResumeRun: (m: ChatMessage) => void,
-  onRetry: (m: ChatMessage) => void,
-  activeAgentId = 'claude',
-) {
+function renderChat(opts: {
+  onResumeRun?: (m: ChatMessage) => void;
+  onRetry: (m: ChatMessage) => void;
+  onSend?: (...args: unknown[]) => void;
+  activeAgentId?: string;
+}) {
   return render(
     <ChatPane
       messages={[resumableFailedMessage()]}
@@ -81,17 +82,17 @@ function renderChat(
       projectId="project-1"
       projectFiles={[]}
       onEnsureProject={async () => 'project-1'}
-      onSend={vi.fn()}
+      onSend={opts.onSend ?? vi.fn()}
       onStop={vi.fn()}
-      onRetry={onRetry}
-      onResumeRun={onResumeRun}
+      onRetry={opts.onRetry}
+      onResumeRun={opts.onResumeRun}
       conversations={[
         { projectId: 'project-1', id: 'conv-1', title: 'Current', createdAt: 1, updatedAt: 1 },
       ]}
       activeConversationId="conv-1"
       onSelectConversation={vi.fn()}
       onDeleteConversation={vi.fn()}
-      config={{ agentId: activeAgentId, agentCliEnv: {} } as unknown as AppConfig}
+      config={{ agentId: opts.activeAgentId ?? 'claude', agentCliEnv: {} } as unknown as AppConfig}
     />,
   );
 }
@@ -100,7 +101,7 @@ describe('ChatPane resume-on-failure', () => {
   it('offers Continue (not from-scratch Retry) on a resumable failed run', () => {
     const onResumeRun = vi.fn();
     const onRetry = vi.fn();
-    renderChat(onResumeRun, onRetry, 'claude');
+    renderChat({ onResumeRun, onRetry, activeAgentId: 'claude' });
 
     const continueBtn = screen.getByText('chat.resumeRunCta');
     expect(continueBtn).toBeTruthy();
@@ -113,13 +114,32 @@ describe('ChatPane resume-on-failure', () => {
     expect(onRetry).not.toHaveBeenCalled();
   });
 
+  it('offers Continue via plain send on surfaces without a resume handler (not Retry)', () => {
+    // SideChatTab / design-system chat mount ChatPane without onResumeRun. The
+    // daemon has persisted the resumable session, so the re-sending Retry path
+    // would silently resume + repeat the work. Continue must still show and
+    // resume via a plain send of the continue prompt (no original re-send).
+    const onRetry = vi.fn();
+    const onSend = vi.fn();
+    renderChat({ onRetry, onSend, activeAgentId: 'claude' });
+
+    const continueBtn = screen.getByText('chat.resumeRunCta');
+    expect(continueBtn).toBeTruthy();
+    expect(screen.queryByText('promptTemplates.retry')).toBeNull();
+
+    fireEvent.click(continueBtn);
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(String(onSend.mock.calls[0]![0])).toContain('interrupted by a transient failure');
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
   it('falls back to Retry when the active agent no longer matches the failed run', () => {
     // The failed message is from claude, but the user has since switched the
     // active agent to opencode — the resumable session is keyed to claude, so
     // Continue must NOT show (it would silently start fresh on the wrong agent).
     const onResumeRun = vi.fn();
     const onRetry = vi.fn();
-    renderChat(onResumeRun, onRetry, 'opencode');
+    renderChat({ onResumeRun, onRetry, activeAgentId: 'opencode' });
 
     expect(screen.queryByText('chat.resumeRunCta')).toBeNull();
     expect(screen.getByText('promptTemplates.retry')).toBeTruthy();
