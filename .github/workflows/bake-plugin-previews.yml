@@ -18,7 +18,8 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write # commit the refreshed manifest back to main
+  contents: write # push the manifest branch
+  pull-requests: write # open the review PR (gh pr create needs this; unset perms default to none)
 
 concurrency:
   group: bake-plugin-previews
