@@ -283,11 +283,6 @@ export function AvatarMenu({
         ) : (
           <RemixIcon name="link" size={20} />
         )}
-        {hasAmrPreflightWarning ? (
-          <span className="avatar-agent-trigger__status">
-            {t('avatar.unconfigured')}
-          </span>
-        ) : null}
         <RemixIcon name="arrow-down-s-line" size={14} />
       </button>
       {open && popoverStyle ? createPortal(

@@ -1396,13 +1396,6 @@
   width: 48px;
   grid-template-columns: 26px 20px;
 }
-.app .composer-row .avatar-agent-trigger.avatar-agent-trigger--warning {
-  width: auto;
-  min-width: 92px;
-  grid-template-columns: 22px auto 16px;
-  column-gap: 5px;
-  padding: 0 7px 0 5px;
-}
 .app .composer-row .avatar-btn {
   width: 22px;
   height: 22px;
