@@ -1321,7 +1321,6 @@ export interface PluginsTopClickProps {
   element:
     | 'create_plugin'
     | 'import_plugin'
-    | 'agent_context'
     | 'installed_tab'
     | 'available_tab'
     | 'sources_tab'
@@ -1575,13 +1574,6 @@ export interface IntegrationsUseEverywhereTabClickProps {
     | 'configure_mcp_server'
     | 'copy_guide_for_agent'
     | 'copy';
-}
-
-// Integrations page hero — the "Agent-ready" badge at the top right.
-export interface IntegrationsTopClickProps {
-  page_name: 'integrations';
-  area: 'integrations';
-  element: 'agent_ready';
 }
 
 // CHAT PANEL (studio)
@@ -2295,7 +2287,6 @@ export type UiClickProps =
   | IntegrationsConnectorsTabClickProps
   | IntegrationsSkillsTabClickProps
   | IntegrationsUseEverywhereTabClickProps
-  | IntegrationsTopClickProps
   | ChatPanelClickProps
   | ComposerSessionModeClickProps
   | DesignToolboxClickProps

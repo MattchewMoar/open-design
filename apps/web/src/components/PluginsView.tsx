@@ -325,17 +325,7 @@ export function PluginsView({
             <Icon name="plus" size={13} />
             <span>{t('pluginsView.importPlugin')}</span>
           </button>
-          <div
-            className="plugins-view__badge"
-            aria-hidden="true"
-            onClick={() =>
-              trackPluginsTopClick(analytics.track, {
-                page_name: 'plugins',
-                area: 'plugins',
-                element: 'agent_context',
-              })
-            }
-          >
+          <div className="plugins-view__badge" aria-hidden="true">
             <Icon name="grid" size={15} />
             <span>{t('pluginsView.agentContext')}</span>
           </div>

@@ -56,7 +56,6 @@ import type {
   IntegrationsConnectorsTabClickProps,
   IntegrationsSkillsTabClickProps,
   IntegrationsUseEverywhereTabClickProps,
-  IntegrationsTopClickProps,
   ChatPanelClickProps,
   ComposerSessionModeClickProps,
   ComposerBarClickProps,
@@ -525,13 +524,6 @@ export function trackIntegrationsSkillsTabClick(
 export function trackIntegrationsUseEverywhereTabClick(
   track: Track,
   props: IntegrationsUseEverywhereTabClickProps,
-): void {
-  send(track, 'ui_click', props);
-}
-
-export function trackIntegrationsTopClick(
-  track: Track,
-  props: IntegrationsTopClickProps,
 ): void {
   send(track, 'ui_click', props);
 }
