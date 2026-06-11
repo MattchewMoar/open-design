@@ -1481,6 +1481,61 @@ describe('FileViewer SVG artifacts', () => {
     expect(postMessage).toHaveBeenCalledWith({ type: 'od:slide', action: 'next' }, '*');
   });
 
+  it('falls back to preview scrolling at deck boundaries while Mark mode is open', async () => {
+    const file = baseFile({
+      name: 'deck.html',
+      path: 'deck.html',
+      mime: 'text/html',
+      kind: 'html',
+      artifactManifest: {
+        version: 1,
+        kind: 'html',
+        title: 'Deck',
+        entry: 'deck.html',
+        renderer: 'html',
+        exports: ['html'],
+      },
+    });
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={file}
+        isDeck
+        liveHtml={'<html><body><section class="slide">one</section><section class="slide">two</section></body></html>'}
+      />,
+    );
+
+    const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    const postMessage = vi.fn();
+    const frameWindow = { postMessage };
+    Object.defineProperty(frame, 'contentWindow', {
+      configurable: true,
+      value: frameWindow,
+    });
+
+    const slideStateEvent = new MessageEvent('message', {
+      data: { type: 'od:slide-state', active: 0, count: 2 },
+    });
+    Object.defineProperty(slideStateEvent, 'source', {
+      configurable: true,
+      value: frameWindow,
+    });
+    window.dispatchEvent(slideStateEvent);
+
+    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    const markCanvas = document.querySelector('canvas');
+    expect(markCanvas).toBeTruthy();
+
+    fireEvent.wheel(markCanvas!, { deltaY: -120 });
+
+    await waitFor(() => {
+      expect(postMessage).toHaveBeenCalledWith({ type: 'od:preview-scroll-by', left: 0, top: -120 }, '*');
+    });
+    expect(postMessage).not.toHaveBeenCalledWith({ type: 'od:slide', action: 'prev' }, '*');
+  });
+
   it('shows Cloudflare Pages as a deploy action without requiring a project name input', async () => {
     const file = baseFile({
       name: 'index.html',

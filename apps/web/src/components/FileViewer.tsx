@@ -6353,10 +6353,11 @@ function HtmlViewer({
     return () => window.removeEventListener('message', onMessage);
   }, [inspectMode, isOurPreviewIframeSource]);
 
-  function postSlide(action: 'next' | 'prev' | 'first' | 'last') {
+  function postSlide(action: 'next' | 'prev' | 'first' | 'last'): boolean {
     const win = activePreviewIframe()?.contentWindow;
-    if (!win) return;
+    if (!win) return false;
     win.postMessage({ type: 'od:slide', action }, '*');
+    return true;
   }
 
   function handleMarkModePreviewWheel(deltaX: number, deltaY: number): boolean {
@@ -6364,13 +6365,12 @@ function HtmlViewer({
     const primaryDelta = Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
     if (Math.abs(primaryDelta) < MARK_MODE_DECK_WHEEL_NAV_THRESHOLD) return false;
     const now = Date.now();
-    if (now - markModeDeckWheelNavAtRef.current < MARK_MODE_DECK_WHEEL_NAV_INTERVAL_MS) return true;
+    if (now - markModeDeckWheelNavAtRef.current < MARK_MODE_DECK_WHEEL_NAV_INTERVAL_MS) return false;
     const action = primaryDelta > 0 ? 'next' : 'prev';
-    if (action === 'next' && slideState && slideState.active >= slideState.count - 1) return true;
-    if (action === 'prev' && slideState && slideState.active <= 0) return true;
+    if (action === 'next' && slideState && slideState.active >= slideState.count - 1) return false;
+    if (action === 'prev' && slideState && slideState.active <= 0) return false;
     markModeDeckWheelNavAtRef.current = now;
-    postSlide(action);
-    return true;
+    return postSlide(action);
   }
 
   function syncCachedSlideStateToIframe(target: HTMLIFrameElement | null = activePreviewIframe()) {
