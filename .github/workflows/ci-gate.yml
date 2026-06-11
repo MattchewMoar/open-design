@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate workspace
+    name: Validate workspace gate
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
