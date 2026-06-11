@@ -418,7 +418,7 @@ test('[P0] @critical project detail header design system switch carries into the
   expect(runRequestBodies[0]?.designSystemId).toBe('editorial-noir');
 });
 
-test('[P1] project detail design system picker stays inside the composer controls', async ({ page }) => {
+test('[P2] project detail design system picker stays inside the composer controls', async ({ page }) => {
   await page.goto('/');
   await createProject(page, 'Composer design system position');
   await expectWorkspaceReady(page);
@@ -427,7 +427,7 @@ test('[P1] project detail design system picker stays inside the composer control
   await expect(composer.getByTestId('project-ds-picker-trigger')).toBeVisible();
 });
 
-test('[P1] project detail composer working directory picker opens without leaving chat', async ({ page }) => {
+test('[P2] project detail composer working directory picker opens without leaving chat', async ({ page }) => {
   await page.goto('/');
   await createProject(page, 'Composer working directory picker');
   await expectWorkspaceReady(page);

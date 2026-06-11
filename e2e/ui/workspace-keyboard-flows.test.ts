@@ -119,7 +119,7 @@ test('[P0] workspace tab launcher creates a Browser tab on the reference board h
   await expect(page.getByRole('searchbox', { name: /Search references/i })).toBeVisible();
 });
 
-test('[P1] workspace tab launcher searches files and opens the selected file preview', async ({ page }) => {
+test('[P2] workspace tab launcher searches files and opens the selected file preview', async ({ page }) => {
   await gotoEntryHome(page);
   await createProject(page, 'Workspace launcher file search');
   await expectWorkspaceReady(page);

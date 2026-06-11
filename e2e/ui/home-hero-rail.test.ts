@@ -541,7 +541,7 @@ test('[P1] home hero deck example preset updates the composer input', async ({ p
   );
 });
 
-test('[P1] home hero prompt example cards fill the composer for fallback modes', async ({ page }) => {
+test('[P2] home hero prompt example cards fill the composer for fallback modes', async ({ page }) => {
   await gotoEntryHome(page);
 
   const input = page.getByTestId('home-hero-input');
