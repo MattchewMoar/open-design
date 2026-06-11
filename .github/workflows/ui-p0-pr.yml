@@ -93,6 +93,8 @@ jobs:
             shard: entry-onboarding
           - name: project-workspace
             shard: project-workspace
+          - name: workspace-restoration
+            shard: workspace-restoration
           - name: runtime-recovery
             shard: runtime-recovery
           - name: settings-connectors
