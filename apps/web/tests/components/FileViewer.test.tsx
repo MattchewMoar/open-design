@@ -1439,6 +1439,48 @@ describe('FileViewer SVG artifacts', () => {
     });
   });
 
+  it('keeps deck page navigation available while Mark mode captures preview gestures', () => {
+    const file = baseFile({
+      name: 'deck.html',
+      path: 'deck.html',
+      mime: 'text/html',
+      kind: 'html',
+      artifactManifest: {
+        version: 1,
+        kind: 'html',
+        title: 'Deck',
+        entry: 'deck.html',
+        renderer: 'html',
+        exports: ['html'],
+      },
+    });
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={file}
+        isDeck
+        liveHtml={'<html><body><section class="slide">one</section><section class="slide">two</section></body></html>'}
+      />,
+    );
+
+    const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    const postMessage = vi.fn();
+    Object.defineProperty(frame, 'contentWindow', {
+      configurable: true,
+      value: { postMessage },
+    });
+
+    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    const markCanvas = document.querySelector('canvas');
+    expect(markCanvas).toBeTruthy();
+
+    fireEvent.wheel(markCanvas!, { deltaY: 120 });
+
+    expect(postMessage).toHaveBeenCalledWith({ type: 'od:slide', action: 'next' }, '*');
+  });
+
   it('shows Cloudflare Pages as a deploy action without requiring a project name input', async () => {
     const file = baseFile({
       name: 'index.html',

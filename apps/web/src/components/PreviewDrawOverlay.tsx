@@ -65,6 +65,7 @@ interface Props {
   sendDisabled?: boolean;
   sendDisabledReason?: string;
   onToolbarClick?: (element: DrawToolbarElement, submitAction?: AnnotationAction) => void;
+  onPreviewWheel?: (deltaX: number, deltaY: number) => boolean;
 }
 
 const STROKE_COLOR = '#ff3b30';
@@ -89,6 +90,7 @@ export function PreviewDrawOverlay({
   sendDisabled = false,
   sendDisabledReason,
   onToolbarClick,
+  onPreviewWheel,
 }: Props) {
   const t = useT();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -332,6 +334,10 @@ export function PreviewDrawOverlay({
 
   function onCanvasWheel(e: WheelEvent<HTMLCanvasElement>) {
     if (!active || sending) return;
+    if (onPreviewWheel?.(e.deltaX, e.deltaY)) {
+      e.preventDefault();
+      return;
+    }
     const iframe = activePreviewIframe();
     if (!iframe) return;
     if (scrollPreviewIframeBy(iframe, e.deltaX, e.deltaY)) {

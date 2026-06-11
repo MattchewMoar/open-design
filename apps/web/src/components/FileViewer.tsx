@@ -259,6 +259,8 @@ const COMMENT_SIDE_DOCK_STACKED_HEIGHT_DEDUCTION =
   (COMMENT_SIDE_DOCK_PADDING * 2) + COMMENT_SIDE_DOCK_GAP + COMMENT_SIDE_DOCK_STACKED_PANEL_HEIGHT;
 const COMMENT_SIDE_DOCK_STACKED_COLLAPSED_HEIGHT_DEDUCTION =
   (COMMENT_SIDE_DOCK_PADDING * 2) + COMMENT_SIDE_DOCK_GAP + COMMENT_SIDE_DOCK_STACKED_RAIL_HEIGHT;
+const MARK_MODE_DECK_WHEEL_NAV_INTERVAL_MS = 350;
+const MARK_MODE_DECK_WHEEL_NAV_THRESHOLD = 10;
 
 // The five basic style facets the inspect panel exposes. Kept narrow on
 // purpose — open-slide's design tokens panel only edits global tokens, so
@@ -4964,6 +4966,7 @@ function HtmlViewer({
   const imageExportSnapshotDataUrlRef = useRef<string | null>(null);
   const imageExportPrepareIdRef = useRef(0);
   const screenshotInFlightRef = useRef(false);
+  const markModeDeckWheelNavAtRef = useRef(0);
   const [exportToast, setExportToast] = useState<
     { message: string; tone: 'default' | 'success' | 'error' | 'loading' } | null
   >(null);
@@ -5259,9 +5262,12 @@ function HtmlViewer({
     setPreviewSrcUrl(basePreviewSrcUrl);
     setUrlSelectionBridgeReady(false);
   }, [basePreviewSrcUrl]);
+  const activePreviewIframe = useCallback((urlLoadActive = useUrlLoadPreview): HTMLIFrameElement | null => (
+    urlLoadActive ? urlPreviewIframeRef.current : srcDocPreviewIframeRef.current
+  ), [useUrlLoadPreview]);
   useEffect(() => {
-    iframeRef.current = useUrlLoadPreview ? urlPreviewIframeRef.current : srcDocPreviewIframeRef.current;
-  }, [useUrlLoadPreview]);
+    iframeRef.current = activePreviewIframe();
+  }, [activePreviewIframe]);
 
   useEffect(() => {
     if (filesRefreshKey === 0) return;
@@ -6348,12 +6354,26 @@ function HtmlViewer({
   }, [inspectMode, isOurPreviewIframeSource]);
 
   function postSlide(action: 'next' | 'prev' | 'first' | 'last') {
-    const win = iframeRef.current?.contentWindow;
+    const win = activePreviewIframe()?.contentWindow;
     if (!win) return;
     win.postMessage({ type: 'od:slide', action }, '*');
   }
 
-  function syncCachedSlideStateToIframe(target: HTMLIFrameElement | null = iframeRef.current) {
+  function handleMarkModePreviewWheel(deltaX: number, deltaY: number): boolean {
+    if (!effectiveDeck) return false;
+    const primaryDelta = Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+    if (Math.abs(primaryDelta) < MARK_MODE_DECK_WHEEL_NAV_THRESHOLD) return false;
+    const now = Date.now();
+    if (now - markModeDeckWheelNavAtRef.current < MARK_MODE_DECK_WHEEL_NAV_INTERVAL_MS) return true;
+    const action = primaryDelta > 0 ? 'next' : 'prev';
+    if (action === 'next' && slideState && slideState.active >= slideState.count - 1) return true;
+    if (action === 'prev' && slideState && slideState.active <= 0) return true;
+    markModeDeckWheelNavAtRef.current = now;
+    postSlide(action);
+    return true;
+  }
+
+  function syncCachedSlideStateToIframe(target: HTMLIFrameElement | null = activePreviewIframe()) {
     const active = htmlPreviewSlideState.get(previewStateKey)?.active;
     const win = target?.contentWindow;
     if (!win || typeof active !== 'number') return;
@@ -8520,6 +8540,7 @@ function HtmlViewer({
                     sendDisabled={streaming}
                     sendDisabledReason={t('chat.annotationSendDisabledReason')}
                     onToolbarClick={fireDrawToolbarClick}
+                    onPreviewWheel={handleMarkModePreviewWheel}
                   >
                     <div className="artifact-preview-transport-stack">
                       {OD_PREVIEW_KEEP_ALIVE ? (
