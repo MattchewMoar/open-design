@@ -119,6 +119,7 @@ import type {
 const APP_CONFIG_CHANGED_EVENT = 'open-design:app-config-changed';
 const AMR_AGENT_ID = 'amr';
 const AMR_PROFILE_ENV_KEY = 'OPEN_DESIGN_AMR_PROFILE';
+const EXECUTION_SETTINGS_PREVIEW_MODES = new Set(['byok-failure', 'cc-failure', 'cli-failure']);
 
 export function shouldSyncMediaProvidersOnSave(
   mediaProviders: AppConfig['mediaProviders'],
@@ -1856,7 +1857,7 @@ function AppInner() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const previewMode = new URLSearchParams(window.location.search).get('odPreview');
-    if (previewMode !== 'byok-failure') return;
+    if (!previewMode || !EXECUTION_SETTINGS_PREVIEW_MODES.has(previewMode)) return;
     openSettings('execution');
   }, [openSettings]);
 

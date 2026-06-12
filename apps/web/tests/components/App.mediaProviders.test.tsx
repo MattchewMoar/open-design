@@ -167,6 +167,7 @@ const baseConfig: AppConfig = {
 
 describe('App media provider sync flows', () => {
   beforeEach(() => {
+    window.history.pushState({}, '', '/');
     mockedDaemonIsLive.mockResolvedValue(true);
     mockedFetchAgentsStream.mockResolvedValue([]);
     mockedFetchSkills.mockResolvedValue([]);
@@ -189,6 +190,7 @@ describe('App media provider sync flows', () => {
 
   afterEach(() => {
     cleanup();
+    window.history.pushState({}, '', '/');
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -270,4 +272,18 @@ describe('App media provider sync flows', () => {
       expect.objectContaining({ throwOnError: true }),
     );
   });
+
+  it.each(['cc-failure', 'cli-failure'])(
+    'auto-opens execution settings for the %s preview mode',
+    async (previewMode) => {
+      window.history.pushState({}, '', `/?odPreview=${previewMode}`);
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Settings dialog' })).toBeTruthy();
+      });
+      expect(screen.getByText('Section: execution')).toBeTruthy();
+    },
+  );
 });
