@@ -130,14 +130,20 @@ jobs:
           }
           NODE
 
-      - name: Verify Cloudflare image resizing URLs
+      - name: Verify homepage ships optimized WebP art
         run: |
           node <<'NODE'
           const { readFileSync } = require('node:fs');
           const html = readFileSync('apps/landing-page/out/index.html', 'utf8');
-          const resizedUrls = html.match(/https:\/\/static\.open-design\.ai\/cdn-cgi\/image\//g) ?? [];
-          if (resizedUrls.length < 16) {
-            console.error(`Expected at least 16 Cloudflare resized image URLs, found ${resizedUrls.length}`);
+          // The homepage serves its hero / gallery / method art as optimized,
+          // origin-hosted WebP (each kept <1MB by the changed-file blob guard)
+          // instead of Cloudflare Image Resizing variants — see PR #4158, the
+          // local-first homepage design refresh. Require the same floor of 16
+          // optimized references so a regression that reintroduces raw,
+          // unoptimized art (or drops the gallery) is still caught.
+          const webpRefs = html.match(/\/[A-Za-z0-9/_-]+\.webp/g) ?? [];
+          if (webpRefs.length < 16) {
+            console.error(`Expected at least 16 optimized WebP image references, found ${webpRefs.length}`);
             process.exit(1);
           }
           if (/(?:src|content)=["']\/assets\/[A-Za-z0-9_.-]+\.png/.test(html)) {

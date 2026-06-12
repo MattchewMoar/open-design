@@ -324,7 +324,7 @@ export default function Page({
         icon: capIcon.search,
         href: REPO_SKILLS,
         aria: t.stepTitle1,
-        img: '/step-cards/step-1.png?v=8',
+        img: '/step-cards/step-1.webp?v=8',
         desc: t.stepDesc1,
       },
       {
@@ -332,7 +332,7 @@ export default function Page({
         icon: capIcon.direction,
         href: REPO_SKILLS,
         aria: t.stepTitle2,
-        img: '/step-cards/step-2.png?v=8',
+        img: '/step-cards/step-2.webp?v=8',
         desc: t.stepDesc2,
       },
       {
@@ -340,7 +340,7 @@ export default function Page({
         icon: capIcon.grid,
         href: REPO_DAEMON,
         aria: t.stepTitle3,
-        img: '/step-cards/step-3.png?v=7',
+        img: '/step-cards/step-3.webp?v=7',
         desc: t.stepDesc3,
       },
       {
@@ -348,7 +348,7 @@ export default function Page({
         icon: capIcon.adapters,
         href: REPO,
         aria: t.stepTitle4,
-        img: '/step-cards/step-4.png?v=9',
+        img: '/step-cards/step-4.webp?v=9',
         desc: t.stepDesc4,
       },
     ];
@@ -529,7 +529,7 @@ export default function Page({
                     <div className='about-panel'>
                       <div className='about-panel-img about-panel-img-bare about-panel-img-captioned'>
                         <LazyImg
-                          src='/about/desktop-native.png'
+                          src='/about/desktop-native.webp'
                           alt='设计在桌面端发生。本地文件、Figma 导出、代码仓库直接可读，Agent 拥有终端执行全部能力。'
                         />
                         <p className='about-panel-caption'>
@@ -540,7 +540,7 @@ export default function Page({
                     <div className='about-panel'>
                       <div className='about-panel-img about-panel-img-bare about-panel-img-captioned'>
                         <LazyImg
-                          src='/about/access-agent.png'
+                          src='/about/access-agent.webp'
                           alt='你电脑上的 Claude Code / Codex / Cursor 已经够强。OD 做的是把它们接进完整设计工作流。'
                         />
                         {/* Caption laid over the image's baked-in white card. */}
@@ -552,7 +552,7 @@ export default function Page({
                     <div className='about-panel'>
                       <div className='about-panel-img about-panel-img-bare about-panel-img-captioned'>
                         <LazyImg
-                          src='/about/self-evolution.png?v=4'
+                          src='/about/self-evolution.webp?v=4'
                           alt='每次选择都沉淀为 Design System、偏好和记忆，下次生成更接近你要的结果。'
                         />
                         <p className='about-panel-caption'>
@@ -719,7 +719,7 @@ export default function Page({
                     href: href('/skills/mode/deck/'),
                     preview: '/lab-cards/slides.png?v=5',
                   },
-                  { label: tt('图片', 'Image'), href: href('/skills/'), preview: '/lab-cards/quest.png?v=1', wide: true },
+                  { label: tt('图片', 'Image'), href: href('/skills/'), preview: '/lab-cards/quest.webp?v=1', wide: true },
                   { label: 'HyperFrames', href: href('/skills/'), video: '/lab-hyperframes.mp4' },
                   { label: tt('视频', 'Video'), href: href('/skills/'), video: '/lab-video.mp4' },
                 ] as ReadonlyArray<{

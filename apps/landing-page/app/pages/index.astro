@@ -1,6 +1,8 @@
 ---
 import Page from '../page';
 import '../globals.css';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import FaviconLinks from '../_components/favicon-links.astro';
@@ -108,6 +110,30 @@ const homepageGraph = {
 const faq = getHomeFaq(locale, { origin, repo: REPO_URL });
 const pageHtml = renderToStaticMarkup(
   Page({ counts, github, locale, faq }) as ReturnType<typeof createElement>,
+);
+
+// The homepage globe (cobe) and the Method-section FallingText (matter-js)
+// are progressive enhancements. The landing site ships ZERO bundled/module
+// JavaScript (see the `Verify zero external JavaScript` CI gate), so we can't
+// let Astro process `<script>` tags that `import` these packages — that would
+// emit external `/_astro/*.js` module bundles. Instead we read each library's
+// prebuilt runtime from `node_modules` at build time and inline it verbatim as
+// a classic (non-module) `<script is:inline>`, mirroring how
+// `locale-switcher-script.astro` injects its enhancer. cobe ships ESM only, so
+// we strip its single trailing `export { … as default }` and expose the globe
+// factory on `window.__cobe` instead; matter-js ships a UMD build that attaches
+// `Matter` to `window` on its own.
+const requireFromHere = createRequire(import.meta.url);
+const cobeRuntime = `(function(){${readFileSync(
+  requireFromHere.resolve('cobe'),
+  'utf8',
+).replace(
+  /export\s*\{\s*(\w+)\s+as\s+default\s*\}\s*;?\s*$/,
+  'window.__cobe=$1;',
+)}})();`;
+const matterRuntime = readFileSync(
+  requireFromHere.resolve('matter-js/build/matter.min.js'),
+  'utf8',
 );
 ---
 
@@ -1268,13 +1294,12 @@ const pageHtml = renderToStaticMarkup(
         for (const el of elements) observer.observe(el);
       })();
     </script>
-    <script>
-      import createGlobe from 'cobe';
-
+    <script is:inline set:html={cobeRuntime} />
+    <script is:inline>
       const initContributorGlobes = () => {
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const canvases = Array.from(
-          document.querySelectorAll<HTMLCanvasElement>('[data-testimonial-globe] canvas'),
+          document.querySelectorAll('[data-testimonial-globe] canvas'),
         );
         if (canvases.length === 0) return;
 
@@ -1287,7 +1312,7 @@ const pageHtml = renderToStaticMarkup(
           { location: [1.3521, 103.8198], size: 0.04 },
           { location: [-23.5505, -46.6333], size: 0.042 },
           { location: [-33.8688, 151.2093], size: 0.042 },
-        ] as const;
+        ];
 
         for (const canvas of canvases) {
           if (canvas.dataset.globeReady === 'true') continue;
@@ -1304,7 +1329,7 @@ const pageHtml = renderToStaticMarkup(
           updateSize();
           window.addEventListener('resize', updateSize, { passive: true });
 
-          const globe = createGlobe(canvas, {
+          const globe = window.__cobe(canvas, {
             devicePixelRatio: dpr,
             width: width * dpr,
             height: width * dpr,
@@ -1322,7 +1347,7 @@ const pageHtml = renderToStaticMarkup(
             scale: 1,
             markerElevation: 0.015,
             markers: markers.map((marker) => ({
-              location: [...marker.location] as [number, number],
+              location: [...marker.location],
               size: marker.size,
             })),
           });
@@ -1370,11 +1395,11 @@ const pageHtml = renderToStaticMarkup(
       // spinning ring (see `.contributor-orbit` in globals.css). No spokes.
       const enhanceContributorOrbit = () => {
         const mounts = Array.from(
-          document.querySelectorAll<HTMLElement>('[data-contributor-orbit]'),
+          document.querySelectorAll('[data-contributor-orbit]'),
         );
         if (mounts.length === 0) return;
 
-        const build = (avatars: { src: string; href: string; handle: string }[]) => {
+        const build = (avatars) => {
           const count = avatars.length;
           for (const mount of mounts) {
             const ring = document.createElement('div');
@@ -1468,26 +1493,27 @@ const pageHtml = renderToStaticMarkup(
 
       enhanceContributorOrbit();
     </script>
-    <script>
+    <script is:inline set:html={matterRuntime} />
+    <script is:inline>
       // FallingText (React Bits) ported to vanilla matter-js. The agent-name
       // chips in the Method section drop into a physics playground on trigger;
       // the words are server-rendered (.falling-word) so the text is readable
-      // and SEO-visible before any physics runs.
-      import Matter from 'matter-js';
+      // and SEO-visible before any physics runs. matter-js is inlined as a
+      // classic (non-module) script above and attaches `Matter` to `window`.
 
       const initFallingText = () => {
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const containers = Array.from(
-          document.querySelectorAll<HTMLElement>('[data-falling-text]'),
+          document.querySelectorAll('[data-falling-text]'),
         );
         if (containers.length === 0) return;
 
-        const { Engine, Render, World, Bodies, Runner, Mouse, MouseConstraint, Body } = Matter;
+        const { Engine, Render, World, Bodies, Runner, Mouse, MouseConstraint, Body } = window.Matter;
 
         for (const container of containers) {
           if (container.dataset.fallingReady === 'true') continue;
-          const target = container.querySelector<HTMLElement>('.falling-text-target');
-          const canvasContainer = container.querySelector<HTMLElement>('.falling-text-canvas');
+          const target = container.querySelector('.falling-text-target');
+          const canvasContainer = container.querySelector('.falling-text-canvas');
           if (!target || !canvasContainer) continue;
 
           // The reveal banner is draggable: the user can grab it with the mouse
@@ -1495,14 +1521,14 @@ const pageHtml = renderToStaticMarkup(
           // and layer the drag delta on top via `--drag-x` / `--drag-y`, and
           // stop the pointer event from reaching the matter.js mouse so the
           // physics chips behind it don't get grabbed at the same time.
-          const revealEl = container.querySelector<HTMLElement>('[data-falling-reveal]');
+          const revealEl = container.querySelector('[data-falling-reveal]');
           if (revealEl) {
             let dragging = false;
             let startX = 0;
             let startY = 0;
             let baseX = 0;
             let baseY = 0;
-            const readVar = (name: string) =>
+            const readVar = (name) =>
               Number.parseFloat(revealEl.style.getPropertyValue(name)) || 0;
             revealEl.addEventListener('pointerdown', (event) => {
               event.preventDefault();
@@ -1520,7 +1546,7 @@ const pageHtml = renderToStaticMarkup(
               revealEl.style.setProperty('--drag-x', `${baseX + (event.clientX - startX)}px`);
               revealEl.style.setProperty('--drag-y', `${baseY + (event.clientY - startY)}px`);
             });
-            const endDrag = (event: PointerEvent) => {
+            const endDrag = (event) => {
               if (!dragging) return;
               dragging = false;
               revealEl.classList.remove('is-dragging');
@@ -1560,7 +1586,7 @@ const pageHtml = renderToStaticMarkup(
             const rightWall = Bodies.rectangle(width + 25, height / 2, 50, height, wall);
             const ceiling = Bodies.rectangle(width / 2, -25, width, 50, wall);
 
-            const words = Array.from(target.querySelectorAll<HTMLElement>('.falling-word'));
+            const words = Array.from(target.querySelectorAll('.falling-word'));
             const bodies = words.map((elem) => {
               const r = elem.getBoundingClientRect();
               const x = r.left - rect.left + r.width / 2;
@@ -1583,7 +1609,7 @@ const pageHtml = renderToStaticMarkup(
 
             const mouse = Mouse.create(container);
             // Don't let the physics surface swallow page scroll over the canvas.
-            const m = mouse as unknown as { mousewheel: EventListener; element: HTMLElement };
+            const m = mouse;
             m.element.removeEventListener('wheel', m.mousewheel);
             m.element.removeEventListener('DOMMouseScroll', m.mousewheel);
             const mouseConstraint = MouseConstraint.create(engine, {
@@ -1608,7 +1634,7 @@ const pageHtml = renderToStaticMarkup(
             // Banner appears the moment the icons start dropping — no waiting
             // for the pile to settle.
             container
-              .querySelector<HTMLElement>('[data-falling-reveal]')
+              .querySelector('[data-falling-reveal]')
               ?.classList.add('is-visible');
 
             const loop = () => {
@@ -1632,7 +1658,7 @@ const pageHtml = renderToStaticMarkup(
           if (reduceMotion) {
             container.dataset.fallingReady = 'true';
             // No physics for reduced-motion readers — just show the banner.
-            container.querySelector<HTMLElement>('[data-falling-reveal]')?.classList.add('is-visible');
+            container.querySelector('[data-falling-reveal]')?.classList.add('is-visible');
             continue;
           }
           if (trigger === 'auto') start();
