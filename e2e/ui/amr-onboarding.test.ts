@@ -251,7 +251,9 @@ test('[P0] @critical onboarding signed-in AMR path finishes setup with the selec
   await selectOnboardingOption(amrCard, 'Model', 'DeepSeek V4 Flash');
   await expect(expectOnboardingTrigger(amrCard, 'Model')).toContainText('DeepSeek V4 Flash');
 
-  await page.getByRole('button', { name: /Continue/i }).click();
+  await page.getByRole('button', { name: /^Continue$/i }).click();
+  await expect(page.getByText(/Optional details for better defaults/i)).toBeVisible();
+  await page.getByRole('button', { name: /^Continue$/i }).click();
   await page.getByRole('button', { name: /Finish setup/i }).click();
 
   await expect(page).not.toHaveURL(/\/onboarding$/);
