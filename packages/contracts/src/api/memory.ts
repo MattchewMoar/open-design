@@ -340,8 +340,10 @@ export interface MemoryChangeEvent {
   /** Number of entries written in this pass — only on `kind: 'extract'`. */
   count?: number;
   /** Where the change came from. Useful for UX (e.g., suppress toasts on
-   *  manual edits since the user just clicked Save themselves). */
-  source?: 'heuristic' | 'llm' | 'manual' | 'connector' | 'brand';
+   *  manual edits since the user just clicked Save themselves).
+   *  `'annotation'` is the auto-distiller that turns preview comments /
+   *  highlights / drawn marks into durable feedback + rule memory. */
+  source?: 'heuristic' | 'llm' | 'manual' | 'connector' | 'brand' | 'annotation';
   /** Only on `kind: 'config'` — the new enabled flag. */
   enabled?: boolean;
   /** Unix milliseconds. */
