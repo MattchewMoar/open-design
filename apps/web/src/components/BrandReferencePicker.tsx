@@ -23,6 +23,10 @@ export interface BrandReferencePickerProps {
   /** 'full' adds the heading/subtext and a roomier gallery; 'compact' trims
    *  the chrome for narrow surfaces like the modal or onboarding panel. */
   variant?: 'full' | 'compact';
+  /** Pin the heading / quick-pick row / controls and let ONLY the gallery
+   *  scroll within a bounded-height parent (e.g. the New Brand modal). When
+   *  false the whole picker flows and the page owns the scroll. */
+  fillHeight?: boolean;
   /** Disable interaction while an extraction is already in flight. */
   disabled?: boolean;
   className?: string;
@@ -91,6 +95,7 @@ function SearchGlyph() {
 export function BrandReferencePicker({
   onPick,
   variant = 'full',
+  fillHeight = false,
   disabled = false,
   className,
 }: BrandReferencePickerProps) {
@@ -101,6 +106,7 @@ export function BrandReferencePicker({
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(pageSize);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -121,7 +127,9 @@ export function BrandReferencePicker({
   }, [category, query, pageSize]);
 
   // Infinite scroll: reveal the next page well before the user hits the floor,
-  // so the gallery fills smoothly without a jarring button press.
+  // so the gallery fills smoothly without a jarring button press. In fillHeight
+  // mode the bounded gallery itself is the scroll container, so the observer
+  // watches that element instead of the viewport.
   useEffect(() => {
     const el = sentinelRef.current;
     // Graceful degradation: without IntersectionObserver (older runtimes,
@@ -133,11 +141,11 @@ export function BrandReferencePicker({
           setLimit((l) => Math.min(l + pageSize, filtered.length));
         }
       },
-      { rootMargin: '600px 0px' },
+      { root: fillHeight ? scrollAreaRef.current : null, rootMargin: '600px 0px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [filtered.length, pageSize]);
+  }, [filtered.length, pageSize, fillHeight]);
 
   const visible = filtered.slice(0, limit);
   const showQuickPicks = category === ALL && query.trim() === '';
@@ -150,7 +158,12 @@ export function BrandReferencePicker({
     [disabled, onPick],
   );
 
-  const rootClass = [styles.root, compact ? styles.compact : '', className]
+  const rootClass = [
+    styles.root,
+    compact ? styles.compact : '',
+    fillHeight ? styles.fill : '',
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -164,20 +177,27 @@ export function BrandReferencePicker({
       )}
 
       {showQuickPicks ? (
-        <div className={styles.quickPicks} aria-label={t('brandPicker.quickPicksLabel')}>
-          {QUICK_PICK_BRANDS.map((brand) => (
-            <button
-              key={`quick-${brand.domain}`}
-              type="button"
-              className={styles.quickChip}
-              disabled={disabled}
-              onClick={() => handlePick(brand)}
-              data-testid={`brand-quick-${brand.domain}`}
-            >
-              <BrandFavicon domain={brand.domain} name={brand.name} />
-              <span className={styles.quickName}>{brand.name}</span>
-            </button>
-          ))}
+        <div
+          className={styles.quickPicksSection}
+          role="group"
+          aria-label={t('brandPicker.quickPicksLabel')}
+        >
+          <span className={styles.quickPicksLabel}>{t('brandPicker.quickPicksLabel')}</span>
+          <div className={styles.quickPicks}>
+            {QUICK_PICK_BRANDS.map((brand) => (
+              <button
+                key={`quick-${brand.domain}`}
+                type="button"
+                className={styles.quickChip}
+                disabled={disabled}
+                onClick={() => handlePick(brand)}
+                data-testid={`brand-quick-${brand.domain}`}
+              >
+                <BrandFavicon domain={brand.domain} name={brand.name} />
+                <span className={styles.quickName}>{brand.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -208,45 +228,47 @@ export function BrandReferencePicker({
         </div>
       </div>
 
-      <div className={styles.grid} data-testid="brand-picker-grid">
-        {visible.map((brand) => (
-          <button
-            key={brand.domain}
-            type="button"
-            className={styles.card}
-            disabled={disabled}
-            onClick={() => handlePick(brand)}
-            data-testid={`brand-card-${brand.domain}`}
-          >
-            <span className={styles.cardThumb}>
-              <BrandFavicon domain={brand.domain} name={brand.name} />
-            </span>
-            <span className={styles.cardBody}>
-              <span className={styles.cardName}>{brand.name}</span>
-              <span className={styles.cardCategory}>{categoryLabel(brand.category)}</span>
-            </span>
-            <span className={styles.extractPill} aria-hidden>
-              {t('brandPicker.extractAction')}
-              <ArrowGlyph />
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {limit < filtered.length ? (
-        <>
-          <div ref={sentinelRef} className={styles.sentinel} aria-hidden />
-          <div className={styles.showMoreWrap}>
+      <div className={styles.scrollArea} ref={scrollAreaRef}>
+        <div className={styles.grid} data-testid="brand-picker-grid">
+          {visible.map((brand) => (
             <button
+              key={brand.domain}
               type="button"
-              className={styles.showMore}
-              onClick={() => setLimit((l) => Math.min(l + pageSize, filtered.length))}
+              className={styles.card}
+              disabled={disabled}
+              onClick={() => handlePick(brand)}
+              data-testid={`brand-card-${brand.domain}`}
             >
-              {t('brandPicker.showMore')}
+              <span className={styles.cardThumb}>
+                <BrandFavicon domain={brand.domain} name={brand.name} />
+              </span>
+              <span className={styles.cardBody}>
+                <span className={styles.cardName}>{brand.name}</span>
+                <span className={styles.cardCategory}>{categoryLabel(brand.category)}</span>
+              </span>
+              <span className={styles.extractPill} aria-hidden>
+                {t('brandPicker.extractAction')}
+                <ArrowGlyph />
+              </span>
             </button>
-          </div>
-        </>
-      ) : null}
+          ))}
+        </div>
+
+        {limit < filtered.length ? (
+          <>
+            <div ref={sentinelRef} className={styles.sentinel} aria-hidden />
+            <div className={styles.showMoreWrap}>
+              <button
+                type="button"
+                className={styles.showMore}
+                onClick={() => setLimit((l) => Math.min(l + pageSize, filtered.length))}
+              >
+                {t('brandPicker.showMore')}
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }

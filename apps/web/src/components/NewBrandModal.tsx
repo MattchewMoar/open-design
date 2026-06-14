@@ -139,7 +139,12 @@ export function NewBrandModal({ open, onClose, onCreated }: Props) {
         </form>
 
         <div className={styles.pickerWrap}>
-          <BrandReferencePicker variant="compact" disabled={starting} onPick={handlePick} />
+          <BrandReferencePicker
+            variant="compact"
+            fillHeight
+            disabled={starting}
+            onPick={handlePick}
+          />
         </div>
       </div>
     </div>,

@@ -5,6 +5,19 @@
   width: 100%;
 }
 
+/* fillHeight: pin everything but the gallery and let only the gallery scroll
+   inside a bounded-height parent (e.g. the New Brand modal). */
+.fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.fill .head,
+.fill .quickPicksSection,
+.fill .controls {
+  flex: 0 0 auto;
+}
+
 .head {
   display: flex;
   flex-direction: column;
@@ -29,6 +42,25 @@
 }
 
 /* ── Quick-pick row ───────────────────────────────────────────────── */
+.quickPicksSection {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  align-items: center;
+}
+
+.compact .quickPicksSection {
+  align-items: stretch;
+}
+
+.quickPicksLabel {
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .quickPicks {
   display: flex;
   flex-wrap: wrap;
@@ -174,7 +206,22 @@
   color: var(--accent);
 }
 
-/* ── Gallery grid ─────────────────────────────────────────────────── */
+/* ── Gallery (scrolls on its own in fillHeight mode) ──────────────── */
+.scrollArea {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fill .scrollArea {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  /* breathing room so cards and their hover lift never kiss the scrollbar */
+  padding: 2px 4px 4px 2px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));

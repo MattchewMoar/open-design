@@ -21,8 +21,11 @@
 
 .modal {
   width: 100%;
-  max-width: 620px;
-  max-height: calc(100dvh - 48px);
+  max-width: 900px;
+  /* Stable, spacious dialog: a fixed bounded height regardless of how many
+     brand cards exist. The gallery scrolls internally; the header, URL form
+     and quick-pick row stay pinned. */
+  height: min(720px, 86vh);
   display: flex;
   flex-direction: column;
   padding: 24px;
@@ -54,6 +57,7 @@
 }
 
 .head {
+  flex: 0 0 auto;
   margin-bottom: 18px;
 }
 
@@ -72,6 +76,7 @@
 }
 
 .form {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -240,12 +245,15 @@
   gap: 8px;
 }
 
-/* Reference brand picker below the URL form: its own scroll context so the
-   gallery can grow without pushing the URL field off-screen. */
+/* Reference brand picker below the URL form. It fills the remaining modal
+   height and owns its own internal gallery scroll (fillHeight), so the header,
+   URL form and quick-pick row stay pinned while only the gallery scrolls. */
 .pickerWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
