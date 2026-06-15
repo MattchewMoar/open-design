@@ -2595,14 +2595,16 @@ In Open Design, switching is editing two lines in `.env.local`. There's no migra
 
 ### A worked routing for one brief
 
-Concretely, a single landing-page brief might run like this:
+Concretely, a single landing-page brief might run like this. For the draft and first iterations — cheap and fast — point at a low-cost provider:
 
 ```
-# draft + first iterations — cheap and fast
 OPENAI_BASE_URL=https://api.deepseek.com/v1
 OPENAI_API_KEY=sk-…
+```
 
-# then, for the passes where taste decides the outcome:
+Then, for the passes where taste decides the outcome, switch to a stronger model (via the OpenAI-compat shim):
+
+```
 OPENAI_BASE_URL=https://api.anthropic.com/v1   # via the compat shim
 OPENAI_API_KEY=sk-ant-…
 ```
