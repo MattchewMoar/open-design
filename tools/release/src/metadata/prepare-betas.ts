@@ -184,7 +184,7 @@ function fetchOptionalHttpsTextOnce(url: string, redirectCount = 0): Promise<str
       },
       (response) => {
         const statusCode = response.statusCode ?? 0;
-        if (statusCode === 404) {
+        if (statusCode === 403 || statusCode === 404) {
           response.resume();
           resolvePromise(null);
           return;

@@ -62,7 +62,10 @@ async function runPrepare(channel: string, env: Record<string, string>): Promise
   }
 }
 
-async function startMetadataServer(objects: Record<string, unknown>): Promise<MetadataServer> {
+async function startMetadataServer(
+  objects: Record<string, unknown>,
+  statusOverrides: Record<string, number> = {},
+): Promise<MetadataServer> {
   const server = createHttpsServer(
     {
       cert: localHttpsCert,
@@ -76,6 +79,13 @@ async function startMetadataServer(objects: Record<string, unknown>): Promise<Me
       }
 
       const objectKey = decodeURIComponent(new URL(request.url ?? "/", "https://127.0.0.1").pathname.replace(/^\/+/, ""));
+      const statusOverride = statusOverrides[objectKey];
+      if (statusOverride != null) {
+        response.statusCode = statusOverride;
+        response.end("status override");
+        return;
+      }
+
       const object = objects[objectKey];
       if (object == null) {
         response.statusCode = 404;
@@ -144,7 +154,7 @@ function countedMetadata(
 }
 
 function stablePrereleaseMetadata(publicOrigin: string): Record<string, unknown> {
-  const releaseVersion = "0.10.1-prerelease.2";
+  const releaseVersion = "0.10.2-prerelease.2";
   const versionPrefix = `prerelease/versions/${releaseVersion}`;
   const versionUrl = `${publicOrigin}/${versionPrefix}`;
   const artifact = (name: string) => ({
@@ -153,9 +163,9 @@ function stablePrereleaseMetadata(publicOrigin: string): Record<string, unknown>
   });
 
   return {
-    ...countedMetadata("prerelease", releaseVersion, 2, "0.10.1"),
+    ...countedMetadata("prerelease", releaseVersion, 2, "0.10.2"),
     github: {
-      branch: "release/v0.10.1",
+      branch: "release/v0.10.2",
       commit: "0123456789abcdef0123456789abcdef01234567",
       repository: "nexu-io/open-design",
       workflow: "release-prerelease",
@@ -224,7 +234,7 @@ describe("tools-release local channel prepare validation", () => {
         GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
         OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
         OPEN_DESIGN_STABLE_METADATA_URL: `${server.origin}/stable/latest/metadata.json`,
-        OPEN_DESIGN_STABLE_VERSION: "0.10.1",
+        OPEN_DESIGN_STABLE_VERSION: "0.10.2",
       };
 
       const beta = await runPrepare("beta", {
@@ -233,9 +243,9 @@ describe("tools-release local channel prepare validation", () => {
         OPEN_DESIGN_BETA_METADATA_URL: `${server.origin}/beta/latest/metadata.json`,
       });
       expect(beta.stdout).toContain("[release-beta] channel: beta");
-      expect(beta.outputs.release_version).toBe("0.10.1-beta.1");
+      expect(beta.outputs.release_version).toBe("0.10.2-beta.1");
       expect(beta.outputs.release_number).toBe("1");
-      expect(beta.outputs.beta_version).toBe("0.10.1-beta.1");
+      expect(beta.outputs.beta_version).toBe("0.10.2-beta.1");
 
       const betas = await runPrepare("betas", {
         ...commonEnv,
@@ -243,17 +253,17 @@ describe("tools-release local channel prepare validation", () => {
         OPEN_DESIGN_BETAS_METADATA_URL: `${server.origin}/betas/latest/metadata.json`,
       });
       expect(betas.stdout).toContain("[release-betas] channel: betas");
-      expect(betas.outputs.release_version).toBe("0.10.1-betas.1");
+      expect(betas.outputs.release_version).toBe("0.10.2-betas.1");
       expect(betas.outputs.release_number).toBe("1");
 
       const preview = await runPrepare("preview", {
         ...commonEnv,
         GITHUB_REF_NAME: "main",
         OPEN_DESIGN_PREVIEW_METADATA_URL: `${server.origin}/preview/latest/metadata.json`,
-        OPEN_DESIGN_PREVIEW_VERSION: "0.10.1",
+        OPEN_DESIGN_PREVIEW_VERSION: "0.10.2",
       });
       expect(preview.stdout).toContain("[release-preview] channel: preview");
-      expect(preview.outputs.release_version).toBe("0.10.1-preview.1");
+      expect(preview.outputs.release_version).toBe("0.10.2-preview.1");
       expect(preview.outputs.release_number).toBe("1");
 
       const prerelease = await runPrepare("prerelease", {
@@ -262,9 +272,9 @@ describe("tools-release local channel prepare validation", () => {
         OPEN_DESIGN_PRERELEASE_METADATA_URL: `${server.origin}/prerelease/latest/metadata.json`,
       });
       expect(prerelease.stdout).toContain("[release-prerelease] channel: prerelease");
-      expect(prerelease.outputs.release_version).toBe("0.10.1-prerelease.3");
-      expect(prerelease.outputs.release_number).toBe("3");
-      expect(prerelease.outputs.prerelease_number).toBe("3");
+      expect(prerelease.outputs.release_version).toBe("0.10.2-prerelease.1");
+      expect(prerelease.outputs.release_number).toBe("1");
+      expect(prerelease.outputs.prerelease_number).toBe("1");
     } finally {
       await server.close();
       await rm(ghRoot, { force: true, recursive: true });
@@ -285,8 +295,38 @@ describe("tools-release local channel prepare validation", () => {
         OPEN_DESIGN_PREVIEW_METADATA_URL: `${server.origin}/preview/latest/metadata.json`,
       });
 
-      expect(preview.stdout).toContain("[release-preview] base version: 0.10.1");
-      expect(preview.outputs.release_version).toBe("0.10.1-preview.1");
+      expect(preview.stdout).toContain("[release-preview] base version: 0.10.2");
+      expect(preview.outputs.release_version).toBe("0.10.2-preview.1");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("treats a 403 betas latest response as a cold-start missing metadata object", async () => {
+    const objects: Record<string, unknown> = {
+      "stable/latest/metadata.json": {
+        baseVersion: "0.10.1",
+        channel: "stable",
+        releaseVersion: "0.10.1",
+        stableVersion: "0.10.1",
+      },
+    };
+    const server = await startMetadataServer(objects, {
+      "betas/latest/metadata.json": 403,
+    });
+
+    try {
+      const betas = await runPrepare("betas", {
+        GITHUB_REF_NAME: "main",
+        GITHUB_REPOSITORY: "nexu-io/open-design",
+        GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
+        OPEN_DESIGN_BETAS_METADATA_URL: `${server.origin}/betas/latest/metadata.json`,
+        OPEN_DESIGN_STABLE_METADATA_URL: `${server.origin}/stable/latest/metadata.json`,
+      });
+
+      expect(betas.stdout).toContain("betas metadata.json: not found; using betas.0 fallback");
+      expect(betas.outputs.release_version).toBe("0.10.2-betas.1");
+      expect(betas.outputs.release_number).toBe("1");
     } finally {
       await server.close();
     }
@@ -296,7 +336,7 @@ describe("tools-release local channel prepare validation", () => {
     const objects: Record<string, unknown> = {};
     const server = await startMetadataServer(objects);
     const ghRoot = await mkdtemp(join(tmpdir(), "od-tools-release-gh-"));
-    objects["prerelease/versions/0.10.1-prerelease.2/metadata.json"] = stablePrereleaseMetadata(server.origin);
+    objects["prerelease/versions/0.10.2-prerelease.2/metadata.json"] = stablePrereleaseMetadata(server.origin);
 
     try {
       const fakeGh = await writeFakeGhScript(ghRoot);
@@ -307,15 +347,15 @@ describe("tools-release local channel prepare validation", () => {
         OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
         OPEN_DESIGN_RELEASE_DRY_RUN: "true",
         OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: server.origin,
-        OPEN_DESIGN_STABLE_PRERELEASE_VERSION: "0.10.1-prerelease.2",
-        OPEN_DESIGN_STABLE_VERSION: "0.10.1",
+        OPEN_DESIGN_STABLE_PRERELEASE_VERSION: "0.10.2-prerelease.2",
+        OPEN_DESIGN_STABLE_VERSION: "0.10.2",
       });
 
       expect(stable.stdout).toContain("[release-stable] channel: stable");
-      expect(stable.stdout).toContain("[release-stable] validated prerelease: 0.10.1-prerelease.2");
-      expect(stable.outputs.release_version).toBe("0.10.1");
+      expect(stable.stdout).toContain("[release-stable] validated prerelease: 0.10.2-prerelease.2");
+      expect(stable.outputs.release_version).toBe("0.10.2");
       expect(stable.outputs.dry_run).toBe("true");
-      expect(stable.outputs.version_tag).toBe("open-design-v0.10.1");
+      expect(stable.outputs.version_tag).toBe("open-design-v0.10.2");
     } finally {
       await server.close();
       await rm(ghRoot, { force: true, recursive: true });
