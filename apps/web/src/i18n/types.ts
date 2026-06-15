@@ -1437,6 +1437,10 @@ export interface Dict {
   'automations.crystallize': string;
   'automations.crystallizing': string;
   'automations.crystallizeTitle': string;
+  'automations.crystallizeFailed': string;
+  'automations.crystallizePartialSuccess': string;
+  'automations.crystallizeRefreshFailed': string;
+  'automations.crystallizeNoProposals': string;
   'automations.openConversation': string;
   'automations.runHistoryAria': string;
   'automations.proposalsAria': string;
