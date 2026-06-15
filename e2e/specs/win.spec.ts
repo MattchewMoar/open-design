@@ -621,6 +621,7 @@ winOnboardingDescribe('packaged windows onboarding AMR smoke', () => {
     const report = await createPackagedSmokeReport('win');
     const timings: SmokeTiming[] = [];
     let install: WinInstallResult | null = null;
+    let installedNamespaceRoot: string | null = null;
     let passed = false;
     try {
       await measureSmokeStep(timings, 'pre-clean uninstall', async () => {
@@ -631,7 +632,8 @@ winOnboardingDescribe('packaged windows onboarding AMR smoke', () => {
       installed = true;
       expect(install.namespace).toBe(namespace);
       expectPathInside(install.installDir, join(runtimeNamespaceRoot, 'install'));
-      await resetPackagedRuntimeData(install.installDir);
+      installedNamespaceRoot = await resolveExpectedNamespaceRoot(install.installDir);
+      await resetPackagedRuntimeNamespaceRoot(installedNamespaceRoot);
 
       const start = await measureSmokeStep(timings, 'start fresh onboarding', async () => runToolsPackJson<WinStartResult>('start'));
       started = true;
@@ -739,8 +741,8 @@ winOnboardingDescribe('packaged windows onboarding AMR smoke', () => {
         installed = false;
       }
 
-      if (install != null) {
-        await resetPackagedRuntimeData(install.installDir).catch((error: unknown) => {
+      if (installedNamespaceRoot != null) {
+        await resetPackagedRuntimeNamespaceRoot(installedNamespaceRoot).catch((error: unknown) => {
           console.error('failed to reset packaged windows onboarding runtime data during cleanup', error);
         });
       }
@@ -1352,8 +1354,8 @@ async function seedPackagedOnboardingComplete(installDir: string): Promise<void>
   await writeFile(configPath, `${JSON.stringify({ onboardingCompleted: true }, null, 2)}\n`, 'utf8');
 }
 
-async function resetPackagedRuntimeData(installDir: string): Promise<void> {
-  await rm(await resolveExpectedNamespaceRoot(installDir), { force: true, recursive: true });
+async function resetPackagedRuntimeNamespaceRoot(namespaceRoot: string): Promise<void> {
+  await rm(namespaceRoot, { force: true, recursive: true });
 }
 
 async function resolveExpectedDataRoot(installDir: string): Promise<string> {
